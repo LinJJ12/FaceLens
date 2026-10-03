@@ -4,6 +4,7 @@
 """
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -11,12 +12,19 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from src.api.app import app, warmup_models
-from src.config.settings import HOST, PORT
+from src.config.settings import HOST, PORT, LOG_DIR
 
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format=LOG_FORMAT
 )
+# 同步写入文件，供管理后台"系统日志"查看
+_file_handler = RotatingFileHandler(
+    LOG_DIR / 'app.log', maxBytes=2 * 1024 * 1024, backupCount=3, encoding='utf-8'
+)
+_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+logging.getLogger().addHandler(_file_handler)
 logger = logging.getLogger(__name__)
 
 

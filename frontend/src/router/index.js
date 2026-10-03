@@ -102,7 +102,7 @@ router.beforeEach(async (to, from, next) => {
   
   // 设置页面标题
   if (to.meta.title) {
-    document.title = `${to.meta.title} - 情绪识别系统`
+    document.title = `${to.meta.title} · FaceLens`
   }
   
   // 检查是否需要认证

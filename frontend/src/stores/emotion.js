@@ -16,6 +16,11 @@ export const useEmotionStore = defineStore('emotion', () => {
   const predictions = ref([])
   const isLoading = ref(false)
   const currentPrediction = ref(null) // 当前正在查看的预测结果
+  // 服务端历史（/api/histories），供历史/分析页共用
+  const serverHistories = ref([])
+  const serverHistoriesTotal = ref(0)
+  const serverHistoriesLoading = ref(false)
+  const serverHistoriesError = ref(false)
 
   // 获取当前用户名
   async function getCurrentUsername() {
@@ -116,6 +121,42 @@ export const useEmotionStore = defineStore('emotion', () => {
     }
   }
 
+  // 从服务端拉取识别历史（多页，带兜底）
+  async function fetchServerHistories(perPage = 100, maxPages = 3) {
+    serverHistoriesLoading.value = true
+    serverHistoriesError.value = false
+    try {
+      const response = await api.get('/histories', { params: { page: 1, per_page: perPage } })
+      const total = response.data.total || 0
+      const all = [...(response.data.histories || [])]
+      const totalPages = Math.min(Math.ceil(total / perPage) || 1, maxPages)
+      for (let p = 2; p <= totalPages; p++) {
+        try {
+          const next = await api.get('/histories', { params: { page: p, per_page: perPage } })
+          all.push(...(next.data.histories || []))
+        } catch (error) {
+          break
+        }
+      }
+      serverHistories.value = all
+      serverHistoriesTotal.value = total
+      return all
+    } catch (error) {
+      console.error('获取服务端历史失败:', error)
+      serverHistoriesError.value = true
+      return []
+    } finally {
+      serverHistoriesLoading.value = false
+    }
+  }
+
+  // 删除服务端历史记录（仅本人）
+  async function deleteServerHistory(serverId) {
+    await api.delete(`/histories/${serverId}`)
+    serverHistories.value = serverHistories.value.filter((h) => h.id !== serverId)
+    serverHistoriesTotal.value = Math.max(0, serverHistoriesTotal.value - 1)
+  }
+
   // 预测情绪
   async function predictEmotion(imageData, detectFace = true) {
     isLoading.value = true
@@ -136,6 +177,8 @@ export const useEmotionStore = defineStore('emotion', () => {
           face_image: response.data.preprocessed_image,  // 人脸区域图片
           // 保存模型信息
           model: response.data.model_used,  // 从 model_used 复制到 model
+          // 服务端记录ID（用于与服务端历史去重/删除）
+          history_id: response.data.history_id ?? null,
           // 添加唯一ID
           id: Date.now(),
           // 保留后端返回的所有其他字段
@@ -227,8 +270,14 @@ export const useEmotionStore = defineStore('emotion', () => {
     predictions,
     isLoading,
     currentPrediction,
+    serverHistories,
+    serverHistoriesTotal,
+    serverHistoriesLoading,
+    serverHistoriesError,
     checkHealth,
     fetchModels,
+    fetchServerHistories,
+    deleteServerHistory,
     predictEmotion,
     batchPredict,
     setCurrentPrediction,

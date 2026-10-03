@@ -11,7 +11,7 @@
       <el-col :xs="24" :sm="24" :md="8" :lg="8">
         <el-card class="profile-card" shadow="hover">
           <div class="profile-header">
-            <el-avatar :size="100" :src="userInfo.avatar" @click="viewAvatar" style="cursor: pointer;">
+            <el-avatar :size="100" :src="displayAvatar" @click="viewAvatar" style="cursor: pointer;">
               <el-icon :size="50"><user-filled /></el-icon>
             </el-avatar>
             <el-upload
@@ -89,9 +89,9 @@
               <el-icon><delete /></el-icon>
               <span>清空历史记录</span>
             </el-button>
-            <el-button @click="syncToCloud" class="action-btn">
+            <el-button @click="syncFromServer" class="action-btn" :loading="syncing">
               <el-icon><upload-filled /></el-icon>
-              <span>同步到云端</span>
+              <span>从服务器同步</span>
             </el-button>
           </div>
         </el-card>
@@ -140,7 +140,7 @@
           <el-row :gutter="20">
             <el-col :span="8">
               <div class="stat-box">
-                <div class="stat-box-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
+                <div class="stat-box-icon" style="background: var(--el-color-primary-light-9)">
                   📅
                 </div>
                 <div class="stat-box-content">
@@ -151,7 +151,7 @@
             </el-col>
             <el-col :span="8">
               <div class="stat-box">
-                <div class="stat-box-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
+                <div class="stat-box-icon" style="background: var(--el-color-primary-light-9)">
 
                 </div>
                 <div class="stat-box-content">
@@ -162,7 +162,7 @@
             </el-col>
             <el-col :span="8">
               <div class="stat-box">
-                <div class="stat-box-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
+                <div class="stat-box-icon" style="background: var(--el-color-primary-light-9)">
                   🎯
                 </div>
                 <div class="stat-box-content">
@@ -231,52 +231,6 @@
           </div>
         </el-card>
 
-        <!-- 通知设置 -->
-        <el-card class="settings-card" shadow="hover">
-          <template #header>
-            <span>通知设置</span>
-          </template>
-          <el-form label-width="150px">
-            <el-form-item label="情绪提醒">
-              <el-switch v-model="settings.emotionReminder" />
-              <span class="form-item-tip">当检测到消极情绪时提醒</span>
-            </el-form-item>
-            <el-form-item label="每日总结">
-              <el-switch v-model="settings.dailySummary" />
-              <span class="form-item-tip">每天发送情绪统计摘要</span>
-            </el-form-item>
-            <el-form-item label="健康建议">
-              <el-switch v-model="settings.healthAdvice" />
-              <span class="form-item-tip">定期推送心理健康建议</span>
-            </el-form-item>
-            <el-form-item label="邮件通知">
-              <el-switch v-model="settings.emailNotification" />
-              <span class="form-item-tip">接收邮件通知</span>
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <!-- 隐私设置 -->
-        <el-card class="settings-card" shadow="hover">
-          <template #header>
-            <span>隐私设置</span>
-          </template>
-          <el-form label-width="150px">
-            <el-form-item label="数据收集">
-              <el-switch v-model="settings.dataCollection" />
-              <span class="form-item-tip">允许收集使用数据以改进服务</span>
-            </el-form-item>
-            <el-form-item label="保存图片">
-              <el-switch v-model="settings.saveImages" />
-              <span class="form-item-tip">保存上传的图片用于历史记录</span>
-            </el-form-item>
-            <el-form-item label="匿名分析">
-              <el-switch v-model="settings.anonymousAnalysis" />
-              <span class="form-item-tip">数据以匿名方式参与统计分析</span>
-            </el-form-item>
-          </el-form>
-        </el-card>
-
         <!-- 显示设置 -->
         <el-card class="settings-card" shadow="hover">
           <template #header>
@@ -289,13 +243,6 @@
                 <el-radio-button label="dark">深色</el-radio-button>
                 <el-radio-button label="auto">跟随系统</el-radio-button>
               </el-radio-group>
-            </el-form-item>
-            <el-form-item label="语言">
-              <el-select v-model="settings.language">
-                <el-option label="简体中文" value="zh-CN" />
-                <el-option label="English" value="en-US" />
-                <el-option label="日本語" value="ja-JP" />
-              </el-select>
             </el-form-item>
             <el-form-item label="动画效果">
               <el-switch v-model="settings.animations" />
@@ -311,10 +258,7 @@
           <el-form label-width="150px">
             <el-form-item label="默认模型">
               <el-select v-model="settings.defaultModel">
-                <el-option label="CNN (83.77%)" value="cnn" />
-                <el-option label="VGG16 (80%)" value="vgg" />
-                <el-option label="SE-Net-81 (81%)" value="se81" />
-                <el-option label="SE-Net-83 (83%)" value="se83" />
+                <el-option v-for="opt in modelOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="自动人脸检测">
@@ -348,24 +292,19 @@
     <el-dialog v-model="editProfileDialog" title="编辑资料" width="500px">
       <el-form :model="userInfo" label-width="80px">
         <el-form-item label="用户名">
-          <el-input v-model="userInfo.name" />
+          <el-input v-model="userInfo.name" disabled />
+          <div class="form-item-tip">用户名注册后不可修改</div>
         </el-form-item>
         <el-form-item label="邮箱">
           <el-input v-model="userInfo.email" type="email" />
         </el-form-item>
-        <el-form-item label="手机">
-          <el-input v-model="userInfo.phone" />
-        </el-form-item>
-        <el-form-item label="生日">
-          <el-date-picker v-model="userInfo.birthday" type="date" style="width: 100%" />
-        </el-form-item>
         <el-form-item label="个性签名">
-          <el-input v-model="userInfo.bio" type="textarea" :rows="3" />
+          <el-input v-model="userInfo.bio" type="textarea" :rows="3" placeholder="仅保存在本机" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editProfileDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveProfile">保存</el-button>
+        <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存</el-button>
       </template>
     </el-dialog>
 
@@ -505,7 +444,10 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useEmotionStore } from '../stores/emotion'
 import { useVideoStore } from '../stores/video'
+import { useUserStore } from '../stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { resolveAssetUrl } from '../utils/assets'
+import api from '../api/client'
 import {
   UserFilled,
   Camera,
@@ -523,64 +465,60 @@ import {
 
 const emotionStore = useEmotionStore()
 const videoStore = useVideoStore()
+const userStore = useUserStore()
 
 // 用于防止初始化时触发 watch 保存
 const isInitialized = ref(false)
 
-// 从 localStorage 加载用户信息，如果没有则使用默认值
+// 用户信息：以登录账户（userStore）为准，附加字段仅保存在本机
+// 注意：本地资料存于独立的 userProfile 键，避免覆盖登录态的 userInfo
 const loadUserInfo = () => {
-  const saved = localStorage.getItem('userInfo')
+  const saved = localStorage.getItem('userProfile')
+  const server = userStore.userInfo || {}
+  let local = {}
   if (saved) {
     try {
-      const data = JSON.parse(saved)
-      // 将日期字符串转换回 Date 对象
-      if (data.birthday && typeof data.birthday === 'string') {
-        data.birthday = new Date(data.birthday)
-      }
-      if (data.joinDate && typeof data.joinDate === 'string') {
-        data.joinDate = new Date(data.joinDate)
-      }
-      return data
+      local = JSON.parse(saved) || {}
     } catch (e) {
-      console.warn('解析用户信息失败，使用默认值', e)
+      console.warn('解析本地用户信息失败', e)
     }
   }
   return {
-    name: '情绪识别用户',
-    email: 'user@emotion-ai.com',
-    phone: '138-0000-0000',
-    birthday: new Date('1995-01-01'),
-    bio: '关注心理健康，享受美好生活',
-    avatar: '',
-    role: '普通用户',
-    joinDate: new Date('2025-01-01')
+    name: server.username || local.name || '用户',
+    email: server.email || local.email || '',
+    bio: local.bio || '',
+    avatar: server.avatar || local.avatar || '',
+    role: server.role === 'admin' ? '管理员' : '普通用户',
+    joinDate: server.created_at || local.joinDate || new Date().toISOString()
   }
 }
 
 // 用户信息
 const userInfo = ref(loadUserInfo())
 
-// 计算总识别次数（图片 + 视频）
+// 头像展示地址（兼容服务端相对路径与本地 base64）
+const displayAvatar = computed(() => resolveAssetUrl(userInfo.value.avatar))
+
+// 计算总识别次数（优先使用服务端统计）
 const totalRecognitions = computed(() => {
+  if (emotionStore.serverHistoriesTotal > 0) {
+    return emotionStore.serverHistoriesTotal
+  }
   return emotionStore.predictions.length + videoStore.videoHistory.length
 })
 
-// 计算活跃天数
+// 计算活跃天数（含服务端记录）
 const activeDays = computed(() => {
-  if (emotionStore.predictions.length === 0 && videoStore.videoHistory.length === 0) return 0
-  
   const dates = new Set()
-  // 添加图片识别的日期
-  emotionStore.predictions.forEach(pred => {
-    const date = new Date(pred.timestamp).toDateString()
-    dates.add(date)
-  })
-  // 添加视频识别的日期
-  videoStore.videoHistory.forEach(video => {
-    const date = new Date(video.timestamp).toDateString()
-    dates.add(date)
-  })
-  
+  const push = (ts) => {
+    if (!ts) return
+    const d = new Date(ts)
+    if (!Number.isNaN(d.getTime())) dates.add(d.toDateString())
+  }
+  ;(emotionStore.serverHistories || []).forEach(r => push(r.created_at))
+  emotionStore.predictions.forEach(pred => push(pred.timestamp))
+  videoStore.videoHistory.forEach(video => push(video.timestamp))
+
   return dates.size
 })
 
@@ -603,22 +541,10 @@ const loadSettings = () => {
     }
   }
   return {
-    // 通知设置
-    emotionReminder: true,
-    dailySummary: false,
-    healthAdvice: true,
-    emailNotification: false,
-    
-    // 隐私设置
-    dataCollection: true,
-    saveImages: true,
-    anonymousAnalysis: true,
-    
     // 显示设置
     theme: 'light',
-    language: 'zh-CN',
     animations: true,
-    
+
     // 模型偏好
     defaultModel: 'cnn',
     autoFaceDetect: true,
@@ -629,6 +555,31 @@ const loadSettings = () => {
 
 // 设置
 const settings = ref(loadSettings())
+
+// 模型选项：准确率从后端实时获取，失败时使用静态兜底
+const modelOptions = ref([
+  { label: 'CNN (83.77%)', value: 'cnn' },
+  { label: 'VGG16 (80%)', value: 'vgg' },
+  { label: 'SE-Net-81 (81%)', value: 'se81' },
+  { label: 'SE-Net-83 (83%)', value: 'se83' }
+])
+
+async function loadModelOptions() {
+  try {
+    await emotionStore.fetchModels()
+    const apiModels = emotionStore.availableModels
+    if (Array.isArray(apiModels) && apiModels.length) {
+      modelOptions.value = apiModels.map((m) => {
+        const acc = typeof m.accuracy === 'number' && m.accuracy <= 1
+          ? (m.accuracy * 100).toFixed(2)
+          : m.accuracy
+        return { label: `${m.display_name || m.name} (${acc}%)`, value: m.name }
+      })
+    }
+  } catch (error) {
+    // 保留静态兜底
+  }
+}
 
 // 对话框
 const editProfileDialog = ref(false)
@@ -795,18 +746,42 @@ const levelProgress = computed(() => {
   return Math.round((currentLevelExp / 100) * 100)
 })
 
-// 连续使用天数
+// 连续使用天数：从识别记录的真实时间戳计算（按自然日去重后取最大连续段）
 const consecutiveDays = computed(() => {
-  // 简化版：假设每天都使用
-  return activeDays.value
+  const days = new Set()
+  const push = (ts) => {
+    if (!ts) return
+    const d = new Date(ts)
+    if (!Number.isNaN(d.getTime())) days.add(d.toDateString())
+  }
+  ;(emotionStore.serverHistories || []).forEach(r => push(r.created_at))
+  emotionStore.predictions.forEach(p => push(p.timestamp))
+  videoStore.videoHistory.forEach(v => push(v.timestamp))
+
+  if (days.size === 0) return 0
+
+  const sorted = [...days]
+    .map(str => new Date(str))
+    .sort((a, b) => a - b)
+  let best = 1
+  let current = 1
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = (sorted[i] - sorted[i - 1]) / (1000 * 60 * 60 * 24)
+    current = Math.abs(diff - 1) < 1e-6 ? current + 1 : 1
+    if (current > best) best = current
+  }
+  return best
 })
 
-// 今日识别次数
+// 今日识别次数（含服务端记录）
 const todayCount = computed(() => {
   const today = new Date().toDateString()
-  return emotionStore.predictions.filter(pred => {
-    return new Date(pred.timestamp).toDateString() === today
-  }).length
+  const count = (ts) => ts && new Date(ts).toDateString() === today ? 1 : 0
+  let n = 0
+  ;(emotionStore.serverHistories || []).forEach(r => { n += count(r.created_at) })
+  emotionStore.predictions.forEach(pred => { n += count(pred.timestamp) })
+  videoStore.videoHistory.forEach(v => { n += count(v.timestamp) })
+  return n
 })
 
 // 从 localStorage 加载目标
@@ -846,7 +821,7 @@ function saveSettings() {
     // 注意：applyTheme已经有防抖机制，所以这里直接调用没问题
     applyTheme(settings.value.theme)
     applyAnimations(settings.value.animations)
-    applyLanguage(settings.value.language)
+    applyLanguage("zh-CN")
     
     // 使用setTimeout确保消息在UI更新后显示
     setTimeout(() => {
@@ -932,96 +907,10 @@ function applyAnimations(enable) {
   localStorage.setItem('animations', enable.toString())
 }
 
-// 应用语言设置
+// 应用语言设置（当前版本界面语言为简体中文，仅同步文档语言标记）
 function applyLanguage(lang) {
-  document.documentElement.lang = lang
-  
-  // 更新界面语言显示
-  updateInterfaceLanguage(lang)
-  
-  localStorage.setItem('language', lang)
-}
-
-// 更新界面语言
-function updateInterfaceLanguage(lang) {
-  // 简单的语言映射示例
-  const translations = {
-    'zh-CN': {
-      themeOptions: {
-        light: '浅色',
-        dark: '深色',
-        auto: '跟随系统'
-      },
-      emotionTypes: {
-        happy: '高兴',
-        sad: '悲伤',
-        anger: '生气',
-        surprised: '惊讶',
-        fear: '害怕',
-        disgust: '厌恶',
-        normal: '平静'
-      },
-      settings: {
-        display: '显示设置',
-        theme: '主题模式',
-        language: '语言',
-        animations: '动画效果'
-      }
-    },
-    'en-US': {
-      themeOptions: {
-        light: 'Light',
-        dark: 'Dark',
-        auto: 'Auto'
-      },
-      emotionTypes: {
-        happy: 'Happy',
-        sad: 'Sad',
-        anger: 'Anger',
-        surprised: 'Surprised',
-        fear: 'Fear',
-        disgust: 'Disgust',
-        normal: 'Neutral'
-      },
-      settings: {
-        display: 'Display Settings',
-        theme: 'Theme Mode',
-        language: 'Language',
-        animations: 'Animations'
-      }
-    },
-    'ja-JP': {
-      themeOptions: {
-        light: 'ライト',
-        dark: 'ダーク',
-        auto: '自動'
-      },
-      emotionTypes: {
-        happy: '幸せ',
-        sad: '悲しい',
-        anger: '怒り',
-        surprised: '驚いた',
-        fear: '恐れ',
-        disgust: '嫌悪',
-        normal: '普通'
-      },
-      settings: {
-        display: '表示設定',
-        theme: 'テーマモード',
-        language: '言語',
-        animations: 'アニメーション効果'
-      }
-    }
-  }
-  
-  // 存储当前语言包供其他组件使用
-  localStorage.setItem('currentTranslations', JSON.stringify(translations[lang]))
-  
-  // 应用当前语言到页面元素（示例）
-  document.querySelectorAll('[data-lang-key]').forEach(el => {
-    const key = el.getAttribute('data-lang-key')
-    // 这里可以实现更复杂的翻译逻辑
-  })
+  document.documentElement.lang = lang || 'zh-CN'
+  localStorage.setItem('language', lang || 'zh-CN')
 }
 
 // 恢复默认设置
@@ -1032,15 +921,7 @@ function resetSettings() {
     type: 'warning'
   }).then(() => {
     settings.value = {
-      emotionReminder: true,
-      dailySummary: false,
-      healthAdvice: true,
-      emailNotification: false,
-      dataCollection: true,
-      saveImages: true,
-      anonymousAnalysis: true,
       theme: 'light',
-      language: 'zh-CN',
       animations: true,
       defaultModel: 'cnn',
       autoFaceDetect: true,
@@ -1051,45 +932,64 @@ function resetSettings() {
   }).catch(() => {})
 }
 
-// 保存资料
-function saveProfile() {
-  console.log('💾 手动保存用户资料:', userInfo.value)
-  const saved = JSON.stringify(userInfo.value)
-  localStorage.setItem('userInfo', saved)
-  console.log('✅ 已保存到 localStorage:', saved)
-  
-  // 验证保存
-  const verified = localStorage.getItem('userInfo')
-  console.log('🔍 验证保存的数据:', verified)
-  
-  editProfileDialog.value = false
-  ElMessage.success('资料已更新')
+// 保存资料：邮箱同步到服务端，其余字段仅保存在本机
+const savingProfile = ref(false)
+async function saveProfile() {
+  if (!userInfo.value.email) {
+    ElMessage.warning('请填写邮箱')
+    return
+  }
+  savingProfile.value = true
+  try {
+    const result = await userStore.updateUserInfo({ email: userInfo.value.email })
+    if (result.success) {
+      // 服务端可能返回规范化后的用户信息
+      const serverUser = result.data?.user
+      if (serverUser?.email) userInfo.value.email = serverUser.email
+      localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+      editProfileDialog.value = false
+      ElMessage.success('资料已更新')
+    }
+  } catch (error) {
+    console.error('保存资料失败:', error)
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    savingProfile.value = false
+  }
 }
 
-// 修改密码
-function changePassword() {
+// 修改密码（调用后端 /auth/change-password）
+async function changePassword() {
   if (!passwordForm.value.oldPassword || !passwordForm.value.newPassword) {
     ElMessage.warning('请填写完整')
     return
   }
-  
+
   if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
     ElMessage.error('两次输入的密码不一致')
     return
   }
-  
+
   if (passwordForm.value.newPassword.length < 6) {
     ElMessage.error('密码长度至少6位')
     return
   }
-  
-  // 模拟密码修改
-  changePasswordDialog.value = false
-  ElMessage.success('密码修改成功')
-  passwordForm.value = {
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: ''
+
+  try {
+    const result = await userStore.changePassword({
+      oldPassword: passwordForm.value.oldPassword,
+      newPassword: passwordForm.value.newPassword
+    })
+    if (result.success) {
+      changePasswordDialog.value = false
+      passwordForm.value = {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }
+    }
+  } catch (error) {
+    console.error('修改密码失败:', error)
   }
 }
 
@@ -1151,7 +1051,7 @@ function saveAchievements() {
 }
 
 function getLevelColor() {
-  const colors = ['#67c23a', '#409eff', '#e6a23c', '#f56c6c', '#909399']
+  const colors = ['#67c23a', '#409eff', '#e6a23c', '#f56c6c', 'var(--color-mahogany)']
   return colors[(userLevel.value - 1) % colors.length]
 }
 
@@ -1318,7 +1218,7 @@ function stopDrag() {
 }
 
 // 实现真正的头像剪裁功能
-function confirmAvatar() {
+async function confirmAvatar() {
   // 使用document.querySelector直接获取图片元素，避免ref引用问题
   const imageElement = document.querySelector('.avatar-crop-frame img')
   
@@ -1365,18 +1265,30 @@ function confirmAvatar() {
       canvas.width, canvas.height
     )
     
-    // 获取剪裁后的图像数据
-    const croppedImage = canvas.toDataURL('image/png')
-    
-    // 更新用户头像
-    userInfo.value.avatar = croppedImage
-    localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
-    avatarCropDialog.value = false
-    ElMessage.success('头像更新成功')
-    
-    // 增加经验值
-    experiencePoints.value += 10
-    saveAchievements()
+    // 获取剪裁后的图像数据（压缩为 200x200 JPEG，控制上传体积）
+    const croppedImage = canvas.toDataURL('image/jpeg', 0.85)
+
+    // 上传到服务端（/auth/avatar），成功后更新本地展示
+    try {
+      const response = await api.post('/auth/avatar', { avatar: croppedImage })
+      userInfo.value.avatar = response.data.avatar_url || croppedImage
+      // 同步到全局用户状态（顶栏头像立即更新）
+      if (userStore.userInfo) {
+        userStore.userInfo.avatar = response.data.avatar
+      }
+      avatarCropDialog.value = false
+      ElMessage.success('头像更新成功')
+
+      // 增加经验值
+      experiencePoints.value += 10
+      saveAchievements()
+    } catch (uploadError) {
+      console.error('头像上传失败:', uploadError)
+      // 上传失败时降级为仅本地保存
+      userInfo.value.avatar = croppedImage
+      avatarCropDialog.value = false
+      ElMessage.warning('头像已保存到本机（服务端上传失败）')
+    }
   } catch (error) {
     console.error('头像剪裁失败:', error)
     ElMessage.error('头像剪裁失败，请重试')
@@ -1386,7 +1298,7 @@ function confirmAvatar() {
 // 查看头像大图
 function viewAvatar() {
   if (userInfo.value.avatar) {
-    largeAvatarUrl.value = userInfo.value.avatar
+    largeAvatarUrl.value = displayAvatar.value
     viewAvatarDialog.value = true
   }
 }
@@ -1406,105 +1318,95 @@ function handleImportData(file) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result)
-      
+
       ElMessageBox.confirm(
-        '导入数据将覆盖当前所有数据，是否继续？',
+        '导入数据将合并到当前数据中（历史记录、设置、成就等），是否继续？',
         '确认导入',
         {
           confirmButtonText: '确定导入',
           cancelButtonText: '取消',
           type: 'warning'
         }
-      ).then(() => {
-        // 导入用户信息
-        if (data.userInfo) {
-          userInfo.value = data.userInfo
-          localStorage.setItem('userInfo', JSON.stringify(data.userInfo))
-        }
-        
-        // 导入设置
-        if (data.settings) {
-          settings.value = data.settings
-          localStorage.setItem('userSettings', JSON.stringify(data.settings))
-        }
-        
-        // 导入预测数据
-        if (data.predictions) {
-          emotionStore.predictions = data.predictions
-          // 使用正确的 localStorage 键
-          const emotionData = {
-            predictions: data.predictions,
-            currentPrediction: data.currentPrediction || null,
-            currentModel: emotionStore.currentModel,
-            timestamp: new Date().toISOString()
+      ).then(async () => {
+        try {
+          // 导入图片识别历史：写入 IndexedDB（与 store 持久化路径一致）
+          if (Array.isArray(data.predictions) && data.predictions.length > 0) {
+            const existing = emotionStore.predictions.map(p => p.id)
+            const incoming = data.predictions.filter(p => !existing.includes(p.id))
+            emotionStore.predictions = [...incoming, ...emotionStore.predictions]
+            await emotionStore.saveToStorage()
           }
-          localStorage.setItem('emotion_predictions', JSON.stringify(emotionData))
-          console.log('✅ 已导入图片识别历史:', data.predictions.length, '条')
+
+          // 导入视频历史：写入 IndexedDB
+          if (Array.isArray(data.videoHistory) && data.videoHistory.length > 0) {
+            const existingVideoIds = new Set(videoStore.videoHistory.map(v => v.video_id))
+            const incomingVideos = data.videoHistory.filter(v => !existingVideoIds.has(v.video_id))
+            videoStore.videoHistory = [...incomingVideos, ...videoStore.videoHistory]
+            await videoStore.saveHistory()
+          }
+
+          // 导入设置
+          if (data.settings) {
+            settings.value = { ...settings.value, ...data.settings }
+            localStorage.setItem('userSettings', JSON.stringify(settings.value))
+            applyTheme(settings.value.theme)
+            applyAnimations(settings.value.animations)
+          }
+
+          // 导入成就 / 经验值 / 目标
+          if (Array.isArray(data.achievements) && data.achievements.length > 0) {
+            const unlockedIds = new Set(achievements.value.filter(a => a.unlocked).map(a => a.id))
+            data.achievements.forEach(a => {
+              if (a.unlocked && !unlockedIds.has(a.id)) {
+                const target = achievements.value.find(x => x.id === a.id)
+                if (target) {
+                  target.unlocked = true
+                  target.unlockedAt = a.unlockedAt
+                }
+              }
+            })
+            saveAchievements()
+          }
+          if (typeof data.experiencePoints === 'number' && data.experiencePoints > experiencePoints.value) {
+            experiencePoints.value = data.experiencePoints
+          }
+          if (Array.isArray(data.goals)) {
+            const existingGoalIds = new Set(goals.value.map(g => g.id))
+            goals.value = [...goals.value, ...data.goals.filter(g => !existingGoalIds.has(g.id))]
+            saveGoals()
+          }
+
+          ElMessage.success('数据导入成功！')
+        } catch (importError) {
+          console.error('导入数据处理失败:', importError)
+          ElMessage.error('导入失败：' + importError.message)
         }
-        
-        // 导入视频历史数据
-        if (data.videoHistory) {
-          videoStore.videoHistory = data.videoHistory
-          localStorage.setItem('video_history', JSON.stringify(data.videoHistory))
-          console.log('✅ 已导入视频识别历史:', data.videoHistory.length, '条')
-        }
-        
-        // 导入成就
-        if (data.achievements) {
-          achievements.value = data.achievements
-          localStorage.setItem('achievements', JSON.stringify(data.achievements))
-        }
-        
-        // 导入目标
-        if (data.goals) {
-          goals.value = data.goals
-          localStorage.setItem('goals', JSON.stringify(data.goals))
-        }
-        
-        // 导入经验值
-        if (data.experiencePoints !== undefined) {
-          experiencePoints.value = data.experiencePoints
-          localStorage.setItem('experiencePoints', data.experiencePoints.toString())
-        }
-        
-        // 导入其他数据
-        if (data.gratitudes) {
-          localStorage.setItem('gratitudes', JSON.stringify(data.gratitudes))
-        }
-        if (data.journals) {
-          localStorage.setItem('journals', JSON.stringify(data.journals))
-        }
-        
-        ElMessage.success('数据导入成功！')
-        
-        // 刷新页面以显示新数据
-        setTimeout(() => {
-          location.reload()
-        }, 1000)
       }).catch(() => {
         ElMessage.info('已取消导入')
       })
     } catch (error) {
-      console.error('数据导入失败:', error)
+      console.error('数据解析失败:', error)
       ElMessage.error('数据格式错误，导入失败')
     }
   }
   reader.readAsText(file.raw)
 }
 
-// 同步到云端
-function syncToCloud() {
-  ElMessageBox.confirm(
-    '云端同步功能需要登录账号，是否继续？',
-    '提示',
-    {
-      confirmButtonText: '去登录',
-      cancelButtonText: '取消',
-      type: 'info'
-    }
-  ).then(() => {
-    ElMessage.info('云端同步功能开发中...')
-  }).catch(() => {})
+// 从服务器同步识别历史到本地缓存
+const syncing = ref(false)
+async function syncFromServer() {
+  syncing.value = true
+  try {
+    const records = await emotionStore.fetchServerHistories(100, 5)
+    await emotionStore.loadFromStorage()
+    await videoStore.loadFromStorage()
+    ElMessage.success(`同步完成：服务端共 ${records.length} 条识别记录`)
+  } catch (error) {
+    console.error('同步失败:', error)
+    ElMessage.error('同步失败，请检查后端服务是否可用')
+  } finally {
+    syncing.value = false
+  }
 }
 
 // 导出所有数据
@@ -1536,31 +1438,26 @@ function exportAllData() {
   ElMessage.success('数据导出成功')
 }
 
-// 清空历史记录
+// 清空历史记录（本地 IndexedDB；服务端记录请到"历史记录"页删除）
 function clearHistory() {
-  ElMessageBox.confirm('确定要清空所有历史记录吗？此操作不可恢复！', '警告', {
-    confirmButtonText: '确定清空',
-    cancelButtonText: '取消',
-    type: 'error'
-  }).then(() => {
-    console.log('🗑️ 开始清空历史记录...')
-    
-    // 清空图片识别历史
-    emotionStore.predictions = []
-    emotionStore.currentPrediction = null
-    // 删除正确的 localStorage 键
-    localStorage.removeItem('emotion_predictions')
-    console.log('✅ 已清空图片识别历史')
-    
-    // 清空视频识别历史
-    videoStore.videoHistory = []
-    videoStore.currentVideo = null
-    videoStore.analysisResults = null
-    localStorage.removeItem('video_history')
-    localStorage.removeItem('video_current_analysis')
-    console.log('✅ 已清空视频识别历史')
-    
-    ElMessage.success('所有历史记录已清空')
+  ElMessageBox.confirm(
+    '确定要清空本机的所有历史记录吗？此操作不可恢复！（服务端记录不受影响，可在历史记录页单独删除）',
+    '清空本地历史',
+    {
+      confirmButtonText: '确定清空',
+      cancelButtonText: '取消',
+      type: 'error'
+    }
+  ).then(async () => {
+    try {
+      await emotionStore.clearAllPredictions()
+      await videoStore.clearHistory()
+      await videoStore.clearCurrentAnalysis()
+      ElMessage.success('本地历史记录已清空')
+    } catch (error) {
+      console.error('清空历史失败:', error)
+      ElMessage.error('清空失败：' + error.message)
+    }
   }).catch(() => {})
 }
 
@@ -1595,13 +1492,12 @@ watch(settings, (newSettings) => {
   }, 500)
 }, { deep: true })
 
-// 监听用户信息变化，自动保存（节流500ms）
+// 监听用户信息变化，自动保存（节流500ms，独立键避免覆盖登录态）
 watch(userInfo, (newUserInfo) => {
   if (!isInitialized.value) return
   if (userInfoSaveTimer) clearTimeout(userInfoSaveTimer)
   userInfoSaveTimer = setTimeout(() => {
-    console.log('💾 自动保存用户信息:', newUserInfo)
-    localStorage.setItem('userInfo', JSON.stringify(newUserInfo))
+    localStorage.setItem('userProfile', JSON.stringify(newUserInfo))
   }, 500)
 }, { deep: true })
 
@@ -1643,39 +1539,25 @@ watch(exportCount, (newCount) => {
 })
 
 onMounted(() => {
+  loadModelOptions()
   try {
-    console.log('🚀 个人中心初始化...')
-    console.log('📦 加载的用户信息:', userInfo.value)
-    
-    // 添加窗口关闭前的保存处理
-    const handleBeforeUnload = () => {
-      console.log('🔄 窗口关闭前保存所有数据...')
-      localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
-      localStorage.setItem('userSettings', JSON.stringify(settings.value))
-      localStorage.setItem('goals', JSON.stringify(goals.value))
-      localStorage.setItem('achievements', JSON.stringify(achievements.value))
-      localStorage.setItem('experiencePoints', experiencePoints.value.toString())
-      localStorage.setItem('exportCount', exportCount.value.toString())
-    }
-    
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    
-    // 数据已在初始化时加载，这里只需要应用设置
-    // 延迟应用设置，确保DOM已渲染完成
+    // 应用当前设置（不再打印冗余日志）
     setTimeout(() => {
       applyTheme(settings.value.theme)
       applyAnimations(settings.value.animations)
-      applyLanguage(settings.value.language)
-      
+      applyLanguage('zh-CN')
+
       // 异步检查成就，避免阻塞UI
       setTimeout(checkAndUnlockAchievements, 100)
-      
+
       // 标记初始化完成，开始监听数据变化
       setTimeout(() => {
         isInitialized.value = true
-        console.log('✅ 初始化完成，开始监听数据变化')
       }, 200)
     }, 50)
+
+    // 拉取服务端历史，让统计卡片展示真实数据
+    emotionStore.fetchServerHistories(100, 3).catch(() => {})
   } catch (error) {
     console.error('初始化时出错:', error)
   }
@@ -1688,8 +1570,7 @@ onBeforeUnmount(() => {
   // 清除所有定时器并立即保存
   if (userInfoSaveTimer) {
     clearTimeout(userInfoSaveTimer)
-    localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
-    console.log('💾 卸载时保存用户信息')
+    localStorage.setItem('userProfile', JSON.stringify(userInfo.value))
   }
   
   if (settingsSaveTimer) {
@@ -1731,12 +1612,12 @@ onBeforeUnmount(() => {
 
 .page-header h1 {
   font-size: 2.5rem;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 0.5rem;
 }
 
 .page-header p {
-  color: #606266;
+  color: var(--color-mahogany);
   font-size: 1.1rem;
 }
 
@@ -1764,12 +1645,12 @@ onBeforeUnmount(() => {
 
 .profile-info h3 {
   font-size: 1.5rem;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 0.5rem;
 }
 
 .user-email {
-  color: #909399;
+  color: var(--color-mahogany);
   margin-bottom: 0.75rem;
 }
 
@@ -1786,12 +1667,12 @@ onBeforeUnmount(() => {
 .stat-value {
   font-size: 1.8rem;
   font-weight: bold;
-  color: #6366F1;
+  color: var(--color-accent);
   margin-bottom: 0.25rem;
 }
 
 .stat-label {
-  color: #909399;
+  color: var(--color-mahogany);
   font-size: 0.875rem;
 }
 
@@ -1870,7 +1751,7 @@ onBeforeUnmount(() => {
 
 .form-item-tip {
   margin-left: 1rem;
-  color: #909399;
+  color: var(--color-mahogany);
   font-size: 0.875rem;
 }
 
@@ -1904,7 +1785,7 @@ onBeforeUnmount(() => {
   gap: 1rem;
   padding: 1rem;
   border-radius: 8px;
-  border: 2px solid #e4e7ed;
+  border: 2px solid var(--color-sand);
   cursor: pointer;
   transition: all 0.3s;
 }
@@ -1916,7 +1797,7 @@ onBeforeUnmount(() => {
 
 .achievement-item.locked {
   opacity: 0.6;
-  background: #f5f7fa;
+  background: var(--el-color-primary-light-9);
 }
 
 .achievement-item:hover {
@@ -1937,12 +1818,12 @@ onBeforeUnmount(() => {
   font-weight: bold;
   font-size: 1.1rem;
   margin-bottom: 0.25rem;
-  color: #303133;
+  color: var(--color-ink);
 }
 
 .achievement-desc {
   font-size: 0.9rem;
-  color: #606266;
+  color: var(--color-mahogany);
   margin-bottom: 0.5rem;
 }
 
@@ -1984,12 +1865,12 @@ onBeforeUnmount(() => {
 .stat-box-value {
   font-size: 2rem;
   font-weight: bold;
-  color: #303133;
+  color: var(--color-ink);
 }
 
 .stat-box-label {
   font-size: 0.9rem;
-  color: #909399;
+  color: var(--color-mahogany);
   margin-top: 0.25rem;
 }
 
@@ -2002,7 +1883,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
-  color: #606266;
+  color: var(--color-mahogany);
 }
 
 /* 目标系统样式 */
@@ -2018,9 +1899,9 @@ onBeforeUnmount(() => {
 
 .goal-item {
   padding: 1rem;
-  background: #f5f7fa;
+  background: var(--el-color-primary-light-9);
   border-radius: 8px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--color-sand);
 }
 
 .goal-header {
@@ -2043,13 +1924,13 @@ onBeforeUnmount(() => {
 
 .goal-target {
   font-size: 0.9rem;
-  color: #606266;
+  color: var(--color-mahogany);
   white-space: nowrap;
 }
 
 .goal-deadline {
   font-size: 0.85rem;
-  color: #909399;
+  color: var(--color-mahogany);
 }
 
 /* 成就详情对话框样式 */
@@ -2066,11 +1947,11 @@ onBeforeUnmount(() => {
 .achievement-detail h3 {
   font-size: 1.5rem;
   margin-bottom: 0.5rem;
-  color: #303133;
+  color: var(--color-ink);
 }
 
 .achievement-detail-desc {
-  color: #606266;
+  color: var(--color-mahogany);
   margin-bottom: 1.5rem;
 }
 
@@ -2083,7 +1964,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 0;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--color-sand);
 }
 
 .info-item:last-child {
@@ -2092,11 +1973,11 @@ onBeforeUnmount(() => {
 
 .info-item .label {
   font-weight: 500;
-  color: #606266;
+  color: var(--color-mahogany);
 }
 
 .info-item .value {
-  color: #303133;
+  color: var(--color-ink);
 }
 
 /* 头像裁剪样式 */
@@ -2111,7 +1992,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #f5f7fa;
+  background: var(--el-color-primary-light-9);
   border-radius: 8px;
   margin-bottom: 1rem;
   position: relative;
@@ -2163,7 +2044,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #606266;
+  color: var(--color-mahogany);
   font-size: 0.9rem;
   margin-top: 0.5rem;
   padding: 0.75rem;
@@ -2258,12 +2139,12 @@ onBeforeUnmount(() => {
 }
 
 .dark .el-switch__core.is-checked {
-  background-color: #6366F1 !important;
+  background-color: var(--color-accent) !important;
 }
 
 .dark .el-radio-button__orig-radio:checked + .el-radio-button__inner {
-  background-color: #6366F1 !important;
-  border-color: #6366F1 !important;
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
 }
 
 .dark .el-select {
@@ -2324,7 +2205,7 @@ onBeforeUnmount(() => {
 .dark .crop-instructions {
   background: #2c3e50 !important;
   color: #e0e0e0 !important;
-  border-left-color: #6366F1 !important;
+  border-left-color: var(--color-accent) !important;
 }
 
 /* 无动画模式 */

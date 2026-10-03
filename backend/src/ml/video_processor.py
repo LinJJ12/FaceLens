@@ -376,7 +376,27 @@ def calculate_emotion_statistics(analysis_results: List[Dict]) -> Dict:
     dominant_emotion_cn = max(emotion_counts_cn, key=emotion_counts_cn.get)
     dominant_emotion_en = max(emotion_counts_en, key=emotion_counts_en.get)
     avg_confidence = total_confidence / total_frames if total_frames > 0 else 0
-    
+
+    # 情绪稳定性：置信度标准差 + 情绪切换频率综合评估（0-100，越高越稳定）
+    confidences = [r.get('confidence', 0) for r in analysis_results]
+    emotions_seq = [r.get('emotion_cn', 'unknown') for r in analysis_results]
+    if total_frames >= 2:
+        mean_conf = sum(confidences) / total_frames
+        conf_std = (sum((c - mean_conf) ** 2 for c in confidences) / total_frames) ** 0.5
+        switches = sum(
+            1 for i in range(1, total_frames) if emotions_seq[i] != emotions_seq[i - 1]
+        )
+        switch_rate = switches / (total_frames - 1)
+        stability_score = max(0.0, min(100.0, 100 - conf_std * 120 - switch_rate * 45))
+    else:
+        stability_score = 100.0
+    if stability_score >= 70:
+        emotion_stability = '稳定'
+    elif stability_score >= 40:
+        emotion_stability = '一般'
+    else:
+        emotion_stability = '波动较大'
+
     return {
         'total_frames': total_frames,
         'emotion_distribution': emotion_counts_cn,  # 兼容旧代码
@@ -386,8 +406,10 @@ def calculate_emotion_statistics(analysis_results: List[Dict]) -> Dict:
         'dominant_emotion_cn': dominant_emotion_cn,  # 中文主导情绪
         'average_confidence': avg_confidence,  # 兼容旧代码
         'avg_confidence': avg_confidence,  # 新版本使用
+        'emotion_stability': emotion_stability,  # 稳定性等级
+        'stability_score': round(stability_score, 1),  # 稳定性得分
         'emotion_percentages': {
-            emotion: (count / total_frames * 100) 
+            emotion: (count / total_frames * 100)
             for emotion, count in emotion_counts_cn.items()
         }
     }

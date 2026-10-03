@@ -42,53 +42,6 @@ export const getHealthAssessment = async (date = null) => {
 }
 
 /**
- * 记录工具使用
- * @param {object} data - 工具使用数据
- * @param {string} data.tool_type - 工具类型 (breathing/meditation/pmr/music)
- * @param {string} data.tool_subtype - 工具子类型
- * @param {number} data.duration_seconds - 使用时长(秒)
-/**
- * 记录建议交互
- * @param {object} data - 建议交互数据
- * @param {string} data.emotion - 情绪
- * @param {string} data.emotion_cn - 情绪(中文)
- * @param {number} data.confidence - 置信度
- * @param {string} data.advice_type - 建议类型
- * @param {string} data.advice_title - 建议标题
- * @param {object} data.advice_content - 建议内容
- * @param {string} data.action - 用户操作 (viewed/completed/ignored)
- */
-export const recordAdviceInteraction = async (data) => {
-  try {
-    const response = await api.post('/health/advice-interaction', data)
-    return response.data
-  } catch (error) {
-    console.error('记录建议交互失败:', error)
-    throw error
-  }
-}
-
-/**
- * 获取建议交互历史
- * @param {string} emotion - 情绪筛选(可选)
- * @param {string} action - 操作筛选(可选)
- * @param {number} limit - 查询数量限制
- */
-export const getAdviceInteraction = async (emotion = null, action = null, limit = 50) => {
-  try {
-    const params = { limit }
-    if (emotion) params.emotion = emotion
-    if (action) params.action = action
-
-    const response = await api.get('/health/advice-interaction', { params })
-    return response.data
-  } catch (error) {
-    console.error('获取建议交互历史失败:', error)
-    throw error
-  }
-}
-
-/**
  * 保存情绪日记
  * @param {object} data - 日记数据
  * @param {string} data.content - 日记内容
@@ -228,8 +181,6 @@ export const deleteGratitude = async (gratitudeId) => {
 export default {
   getEmotionSummary,
   getHealthAssessment,
-  recordAdviceInteraction,
-  getAdviceInteraction,
   saveJournal,
   getJournals,
   getJournal,

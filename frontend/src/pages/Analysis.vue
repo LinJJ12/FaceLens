@@ -20,7 +20,7 @@
         <template #image>
           <el-icon style="font-size: 72px; color: #CBD5E1;"><component :is="'DataAnalysis'" /></el-icon>
         </template>
-        <p style="color: #909399; margin-bottom: 1rem;">
+        <p style="color: var(--color-mahogany); margin-bottom: 1rem;">
           请先在首页上传照片进行情绪识别，系统会为您生成详细的数据分析
         </p>
         <el-button type="primary" @click="$router.push('/')">
@@ -28,7 +28,7 @@
         </el-button>
       </el-empty>
       <el-divider />
-      <div style="color: #606266; line-height: 1.8;">
+      <div style="color: var(--color-mahogany); line-height: 1.8;">
         <h3 style="margin-bottom: 1rem;">数据分析功能预览</h3>
         <ul style="padding-left: 2rem;">
           <li>情绪分布饼图 - 直观展示各种情绪占比</li>
@@ -46,7 +46,7 @@
       <el-col :xs="12" :sm="12" :md="6" :lg="6">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-content">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
+            <div class="stat-icon" style="background: var(--el-color-primary-light-9)">
               <el-icon><data-line /></el-icon>
             </div>
             <div class="stat-info">
@@ -60,7 +60,7 @@
       <el-col :xs="12" :sm="12" :md="6" :lg="6">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-content">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
+            <div class="stat-icon" style="background: var(--el-color-primary-light-9)">
               <el-icon><avatar /></el-icon>
             </div>
             <div class="stat-info">
@@ -74,7 +74,7 @@
       <el-col :xs="12" :sm="12" :md="6" :lg="6">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-content">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
+            <div class="stat-icon" style="background: var(--el-color-primary-light-9)">
               <el-icon><trend-charts /></el-icon>
             </div>
             <div class="stat-info">
@@ -88,7 +88,7 @@
       <el-col :xs="12" :sm="12" :md="6" :lg="6">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-content">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)">
+            <div class="stat-icon" style="background: var(--el-color-primary-light-9)">
               <el-icon><calendar /></el-icon>
             </div>
             <div class="stat-info">
@@ -110,7 +110,7 @@
       <el-row :gutter="20">
         <el-col :xs="24" :sm="12" :md="8">
           <div class="source-stat">
-            <div class="source-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
+            <div class="source-icon" style="background: var(--el-color-primary-light-9)">
               📸
             </div>
             <div class="source-info">
@@ -121,7 +121,7 @@
         </el-col>
         <el-col :xs="24" :sm="12" :md="8">
           <div class="source-stat">
-            <div class="source-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
+            <div class="source-icon" style="background: var(--el-color-primary-light-9)">
               🎬
             </div>
             <div class="source-info">
@@ -132,7 +132,7 @@
         </el-col>
         <el-col :xs="24" :sm="12" :md="8">
           <div class="source-stat">
-            <div class="source-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)">
+            <div class="source-icon" style="background: var(--el-color-primary-light-9)">
               📹
             </div>
             <div class="source-info">
@@ -407,6 +407,7 @@ import {
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { useVideoStore } from '../stores/video'
+import api from '../api/client'
 
 const emotionStore = useEmotionStore()
 const videoStore = useVideoStore()
@@ -414,33 +415,42 @@ const videoStore = useVideoStore()
 // 导出相关
 const isExporting = ref(false)
 
-// 合并图片识别和视频分析的数据
+// 合并图片识别和视频分析的数据（服务端历史优先，本地数据补充）
 const allPredictions = computed(() => {
-  const imagePredictions = emotionStore.predictions || []
-  const videoPredictions = []
-  
-  console.log('📊 [Analysis] 合并数据:', {
-    imageCount: imagePredictions.length,
-    videoHistoryCount: videoStore.videoHistory?.length || 0,
-    videoHistory: videoStore.videoHistory
+  const records = []
+
+  // 服务端历史记录（/api/histories，含图片与视频帧）
+  ;(emotionStore.serverHistories || []).forEach(rec => {
+    records.push({
+      emotion: rec.emotion,
+      emotion_cn: rec.emotion_cn,
+      confidence: rec.confidence,
+      timestamp: rec.created_at,
+      model_used: rec.model_used,
+      source: (rec.input_type || 'image') === 'video' ? 'video' : 'image',
+      origin: 'server'
+    })
   })
-  
-  // 从视频历史记录中提取所有帧的预测结果
-  if (videoStore.videoHistory && Array.isArray(videoStore.videoHistory)) {
+
+  const serverHistoryIds = new Set((emotionStore.serverHistories || []).map(r => r.id))
+
+  // 本地图片预测：仅补充服务端没有的（离线/历史遗留）记录
+  ;(emotionStore.predictions || []).forEach(pred => {
+    if (pred.history_id) return // 服务端保存成功过的记录以服务端为准
+    records.push({
+      ...pred,
+      source: 'image',
+      origin: 'local'
+    })
+  })
+
+  // 本地视频帧：服务端没有视频记录时兜底
+  const serverHasVideo = (emotionStore.serverHistories || []).some(r => (r.input_type || 'image') === 'video')
+  if (!serverHasVideo && videoStore.videoHistory && Array.isArray(videoStore.videoHistory)) {
     videoStore.videoHistory.forEach(video => {
-      const timeline = video.results?.timeline
-      console.log('🎬 [Analysis] 处理视频:', {
-        video_id: video.video_id,
-        hasResults: !!video.results,
-        hasTimeline: !!timeline,
-        timelineIsArray: Array.isArray(timeline),
-        timelineType: typeof timeline,
-        timelineLength: Array.isArray(timeline) ? timeline.length : 'N/A'
-      })
-      
       if (video.results && video.results.timeline && Array.isArray(video.results.timeline)) {
         video.results.timeline.forEach(frame => {
-          videoPredictions.push({
+          records.push({
             emotion: frame.emotion,
             emotion_cn: frame.emotion_cn,
             confidence: frame.confidence,
@@ -448,20 +458,15 @@ const allPredictions = computed(() => {
             model_used: video.model || 'CNN',
             source: 'video',
             video_id: video.video_id,
-            frame_number: frame.frame_number
+            frame_number: frame.frame_number,
+            origin: 'local'
           })
         })
       }
     })
   }
-  
-  console.log('📊 [Analysis] 合并结果:', {
-    imageCount: imagePredictions.length,
-    videoCount: videoPredictions.length,
-    total: imagePredictions.length + videoPredictions.length
-  })
-  
-  return [...imagePredictions, ...videoPredictions]
+
+  return records
 })
 
 // 数据来源统计
@@ -515,8 +520,32 @@ const activeDays = computed(() => {
   return dates.size
 })
 
-// 情绪健康评分
+// 服务端健康评估（/health/assessment，登录用户按日生成）
+const serverAssessment = ref(null)
+
+// 情绪健康评分：优先展示服务端评估结果，本地计算作为兜底
 const healthScore = computed(() => {
+  const local = computeLocalHealthScore()
+  const srv = serverAssessment.value
+  if (!srv || (srv.health_score == null && !srv.alert_title)) return local
+
+  const tagType = srv.alert_type === 'error' ? 'danger' : (srv.alert_type || local.tagType)
+  const suggestions = Array.isArray(srv.suggestions) ? srv.suggestions : []
+  return {
+    score: srv.health_score ?? local.score,
+    level: local.level,
+    level_text: srv.risk_level_cn || srv.alert_title || local.level_text,
+    tagType,
+    positive_rate: srv.positive_rate ?? local.positive_rate,
+    negative_rate: srv.negative_rate ?? local.negative_rate,
+    stability: local.stability,
+    advice: srv.alert_description || local.advice,
+    suggestions,
+    fromServer: true
+  }
+})
+
+function computeLocalHealthScore() {
   if (allPredictions.value.length === 0) {
     return {
       score: 0,
@@ -593,7 +622,7 @@ const healthScore = computed(() => {
     stability: Math.round(stability),
     advice
   }
-})
+}
 
 function getStabilityColor(stability) {
   if (stability >= 70) return '#67c23a'
@@ -756,10 +785,10 @@ function deleteSelectedVideo() {
   deleteVideo(video)
 }
 
-// 删除视频（通用函数）
+// 删除视频（通用函数）：仅删除本地缓存记录（服务端视频文件由管理员统一管理）
 function deleteVideo(video) {
   ElMessageBox.confirm(
-    `确定要删除视频 "${video.video_id}" 及其所有帧记录吗？`,
+    `确定要删除视频 "${video.video_id}" 的本地分析记录吗？（服务端识别数据不受影响）`,
     '删除确认',
     {
       confirmButtonText: '确定删除',
@@ -770,8 +799,8 @@ function deleteVideo(video) {
   ).then(() => {
     // 删除视频
     videoStore.deleteHistoryItem(video.id)
-    ElMessage.success('视频已删除')
-    
+    ElMessage.success('本地视频记录已删除')
+
     // 自动选择下一个视频
     if (videoStore.videoHistory.length > 0) {
       selectedVideoId.value = videoStore.videoHistory[0].video_id
@@ -1368,7 +1397,7 @@ function updateVideoEmotionChart() {
         smooth: true,
         yAxisIndex: 0,
         itemStyle: {
-          color: '#6366F1'
+          color: 'var(--color-accent)'
         },
         areaStyle: {
           color: {
@@ -1604,8 +1633,27 @@ function initAllCharts() {
   })
 }
 
-onMounted(() => {
+// 数据到达后刷新所有图表（服务端历史为异步加载）
+watch(() => allPredictions.value.length, () => {
   initAllCharts()
+})
+
+onMounted(async () => {
+  initAllCharts()
+
+  // 拉取服务端历史与健康评估（失败时静默降级为本地数据）
+  try {
+    await emotionStore.fetchServerHistories(100, 5)
+  } catch (error) {
+    console.warn('服务端历史拉取失败，使用本地数据', error)
+  }
+  try {
+    const response = await api.get('/health/assessment')
+    const data = response.data?.data
+    serverAssessment.value = Array.isArray(data) ? data[data.length - 1] : data || null
+  } catch (error) {
+    console.warn('健康评估获取失败，使用本地计算', error)
+  }
 })
 </script>
 
@@ -1648,12 +1696,12 @@ onMounted(() => {
 
 .page-header h1 {
   font-size: 2.5rem;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 0.5rem;
 }
 
 .page-header p {
-  color: #606266;
+  color: var(--color-mahogany);
   font-size: 1.1rem;
 }
 
@@ -1679,7 +1727,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-size: 2rem;
-  color: white;
+  color: var(--color-ink);
   flex-shrink: 0;
 }
 
@@ -1690,12 +1738,12 @@ onMounted(() => {
 .stat-value {
   font-size: 2rem;
   font-weight: bold;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 0.25rem;
 }
 
 .stat-label {
-  color: #909399;
+  color: var(--color-mahogany);
   font-size: 0.9rem;
 }
 
@@ -1709,7 +1757,7 @@ onMounted(() => {
   align-items: center;
   gap: 1.5rem;
   padding: 1rem;
-  background: #f5f7fa;
+  background: var(--el-color-primary-light-9);
   border-radius: 8px;
   margin-bottom: 1rem;
 }
@@ -1732,12 +1780,12 @@ onMounted(() => {
 .source-value {
   font-size: 1.8rem;
   font-weight: bold;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 0.25rem;
 }
 
 .source-label {
-  color: #606266;
+  color: var(--color-mahogany);
   font-size: 0.9rem;
 }
 
@@ -1782,14 +1830,14 @@ onMounted(() => {
 
 .summary-label {
   font-size: 14px;
-  color: #909399;
+  color: var(--color-mahogany);
   margin-bottom: 8px;
 }
 
 .summary-value {
   font-size: 24px;
   font-weight: bold;
-  color: #303133;
+  color: var(--color-ink);
 }
 
 .video-insights {
@@ -1852,19 +1900,19 @@ onMounted(() => {
 }
 
 .score-circle.excellent {
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  background: var(--color-accent);
 }
 
 .score-circle.good {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  background: var(--color-accent);
 }
 
 .score-circle.normal {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  background: var(--color-accent);
 }
 
 .score-circle.need-attention {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: var(--color-accent);
 }
 
 .score-value {
@@ -1891,7 +1939,7 @@ onMounted(() => {
 .score-right h3 {
   font-size: 1.5rem;
   margin-bottom: 1.5rem;
-  color: #303133;
+  color: var(--color-ink);
 }
 
 .score-details {
@@ -1910,7 +1958,7 @@ onMounted(() => {
 .detail-item .label {
   width: 120px;
   font-weight: 500;
-  color: #606266;
+  color: var(--color-mahogany);
 }
 
 .score-advice {
@@ -1921,7 +1969,7 @@ onMounted(() => {
   background: #f0f9ff;
   border-left: 4px solid #409eff;
   border-radius: 4px;
-  color: #606266;
+  color: var(--color-mahogany);
   line-height: 1.6;
 }
 
@@ -1969,7 +2017,7 @@ onMounted(() => {
 .video-quick-list {
   margin-bottom: 20px;
   border-radius: 8px;
-  background: #f5f7fa;
+  background: var(--el-color-primary-light-9);
   padding: 10px;
 }
 
@@ -2017,7 +2065,7 @@ onMounted(() => {
 .video-item-name {
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2032,6 +2080,6 @@ onMounted(() => {
 
 .video-item-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-mahogany);
 }
 </style>

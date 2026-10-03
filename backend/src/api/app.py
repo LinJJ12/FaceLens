@@ -13,6 +13,8 @@ import base64
 from PIL import Image
 import io
 import os
+import sys
+import platform
 from datetime import datetime
 from typing import Tuple, Optional
 from src.ml.image_preprocess import (
@@ -36,6 +38,7 @@ from src.config.settings import (
     MODEL_CONFIG,
     UPLOAD_FOLDER,
     DATABASE_URI,
+    SQLITE_PATH,
 )
 import logging
 import time
@@ -95,13 +98,16 @@ def _user_can_access_upload(rel_path: str, current_user: dict) -> bool:
         return True
     safe_user = _safe_user_dirname(current_user.get('username'))
     parts = Path(rel_path.replace('\\', '/')).parts
-    if len(parts) >= 2 and parts[0] in ('predictions', 'video_frames'):
+    if len(parts) >= 2 and parts[0] in ('predictions', 'video_frames', 'avatars'):
         return parts[1] == safe_user
     return False
 
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
+
+# 服务启动时间（用于系统信息中的运行时长）
+APP_START_TIME = time.time()
 
 # 上传限制（默认）
 # 整体请求大小上限（防止恶意请求导致内存耗尽）
@@ -1886,6 +1892,146 @@ def admin_delete_video_analysis(analysis_id):
     except Exception as e:
         logger.error(f"删除视频分析失败: {e}")
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== 头像上传 ====================
+@app.route('/api/auth/avatar', methods=['POST'])
+@token_required
+def upload_avatar():
+    """上传用户头像（base64 data URL），保存到 uploads/avatars/<用户名>/ 并更新资料"""
+    try:
+        import re as _re
+        user = request.current_user
+        data = request.get_json(silent=True) or {}
+        avatar_data = (data.get('avatar') or '').strip()
+        match = _re.match(r'^data:image/(png|jpeg|jpg|webp);base64,(.+)$', avatar_data, _re.IGNORECASE)
+        if not match:
+            return jsonify({'error': '头像格式不正确，需为 base64 图片'}), 400
+        ext = match.group(1).lower()
+        if ext == 'jpg':
+            ext = 'jpeg'
+        raw = base64.b64decode(match.group(2))
+        if len(raw) > 2 * 1024 * 1024:
+            return jsonify({'error': '头像文件过大（最大 2MB）'}), 400
+
+        safe_user = _safe_user_dirname(user.get('username'))
+        avatar_dir = UPLOAD_ROOT / 'avatars' / safe_user
+        avatar_dir.mkdir(parents=True, exist_ok=True)
+        # 固定文件名：同一用户只保留最新头像
+        file_path = avatar_dir / f'avatar.{ext}'
+        file_path.write_bytes(raw)
+        rel_path = file_path.relative_to(UPLOAD_ROOT).as_posix()
+
+        # 更新数据库与内存用户
+        updated = False
+        if User is not None:
+            db_user = User.query.filter_by(username=user.get('username')).first()
+            if db_user is not None:
+                db_user.avatar = rel_path
+                db.session.commit()
+                updated = True
+        try:
+            from src.auth import USERS_DB
+            if user.get('username') in USERS_DB:
+                USERS_DB[user['username']]['avatar'] = rel_path
+        except Exception:
+            pass
+
+        return jsonify({
+            'message': '头像已更新',
+            'avatar': rel_path,
+            'avatar_url': f'/api/uploads/{rel_path}',
+            'updated': updated
+        }), 200
+    except Exception as e:
+        logger.error(f"头像上传失败: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== 系统信息与日志（管理员） ====================
+def _dir_size_bytes(path: Path) -> int:
+    total = 0
+    if path.exists():
+        for p in path.rglob('*'):
+            if p.is_file():
+                try:
+                    total += p.stat().st_size
+                except OSError:
+                    pass
+    return total
+
+
+@app.route('/api/admin/system-info', methods=['GET'])
+@token_required
+@admin_required
+def admin_system_info():
+    """系统运行信息（真实数据：运行时长、依赖版本、磁盘占用、模型状态）"""
+    try:
+        import flask
+        uptime_seconds = int(time.time() - APP_START_TIME)
+        days, rem = divmod(uptime_seconds, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes = rem // 60
+        uptime_text = f'{days}天 {hours}小时 {minutes}分钟' if days else f'{hours}小时 {minutes}分钟'
+
+        models_info = []
+        for name, cfg in MODEL_CONFIG.items():
+            model_path = cfg.get('path')
+            exists = bool(model_path) and Path(model_path).exists()
+            models_info.append({
+                'name': name,
+                'display_name': cfg.get('display_name', name),
+                'accuracy': cfg.get('accuracy'),
+                'available': exists,
+                'loaded': name in models,
+            })
+
+        info = {
+            'app_name': 'FaceLens',
+            'app_version': '2.0.0',
+            'uptime_seconds': uptime_seconds,
+            'uptime': uptime_text,
+            'python_version': sys.version.split()[0],
+            'flask_version': getattr(flask, '__version__', 'unknown'),
+            'tensorflow_version': tf.__version__,
+            'platform': platform.platform(),
+            'database_size_bytes': _dir_size_bytes(Path(SQLITE_PATH)) if DATABASE_URI.startswith('sqlite') else 0,
+            'uploads_size_bytes': _dir_size_bytes(UPLOAD_ROOT),
+            'total_predictions': PredictionHistory.query.count(),
+            'total_users': User.query.count(),
+            'models': models_info,
+        }
+        return jsonify({'success': True, 'info': info}), 200
+    except Exception as e:
+        logger.error(f"获取系统信息失败: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/system-logs', methods=['GET'])
+@token_required
+@admin_required
+def admin_system_logs():
+    """读取后端日志文件尾部（默认 200 行）"""
+    try:
+        try:
+            lines = int(request.args.get('lines', 200))
+        except (TypeError, ValueError):
+            lines = 200
+        lines = max(20, min(lines, 1000))
+
+        log_file = UPLOAD_ROOT.parent / 'logs' / 'app.log'
+        if not log_file.is_file():
+            return jsonify({'success': True, 'logs': [], 'message': '暂无日志文件'}), 200
+
+        from collections import deque
+        tail = deque(maxlen=lines)
+        with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                tail.append(line.rstrip('\n'))
+        return jsonify({'success': True, 'logs': list(tail), 'file': str(log_file)}), 200
+    except Exception as e:
+        logger.error(f"读取系统日志失败: {e}")
         return jsonify({'error': str(e)}), 500
 
 

@@ -121,9 +121,9 @@
       <el-form :model="analysisConfig" label-width="140px" class="config-form">
         <el-form-item label="识别模型" class="form-item-spacing">
           <el-radio-group v-model="analysisConfig.model" class="model-radio-group">
-            <el-radio label="cnn" border>CNN (83.77%) · 推荐</el-radio>
-            <el-radio label="vgg" border>VGG16 (80%)</el-radio>
-            <el-radio label="se83" border>SE-Net (83%) · 推荐</el-radio>
+            <el-radio v-for="opt in modelRadioOptions" :key="opt.value" :label="opt.value" border>
+              {{ opt.label }}{{ opt.recommended ? ' · 推荐' : '' }}
+            </el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -220,13 +220,13 @@
     </el-card>
 
     <!-- 步骤4: 查看结果 -->
-    <div v-if="currentStep === 3 && videoStore.hasResults">
+    <div v-if="currentStep === 3 && videoStore.hasResults" ref="resultsRef">
       <!-- 分析概览 -->
       <el-row :gutter="20" class="stats-cards">
         <el-col :xs="12" :sm="6" :md="6">
           <el-card class="stat-card" shadow="hover">
             <div class="stat-content">
-              <div class="stat-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
+              <div class="stat-icon" style="background: var(--el-color-primary-light-9)">
                 <el-icon><film /></el-icon>
               </div>
               <div class="stat-info">
@@ -240,7 +240,7 @@
         <el-col :xs="12" :sm="6" :md="6">
           <el-card class="stat-card" shadow="hover">
             <div class="stat-content">
-              <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
+              <div class="stat-icon" style="background: var(--el-color-primary-light-9)">
                 <el-icon><avatar /></el-icon>
               </div>
               <div class="stat-info">
@@ -254,7 +254,7 @@
         <el-col :xs="12" :sm="6" :md="6">
           <el-card class="stat-card" shadow="hover">
             <div class="stat-content">
-              <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
+              <div class="stat-icon" style="background: var(--el-color-primary-light-9)">
                 <el-icon><trend-charts /></el-icon>
               </div>
               <div class="stat-info">
@@ -457,7 +457,7 @@
           <el-icon><refresh /></el-icon>
           重新分析
         </el-button>
-        <el-button type="primary" size="large" @click="downloadReport">
+        <el-button type="primary" size="large" :loading="isExporting" @click="downloadReport">
           <el-icon><download /></el-icon>
           导出报告
         </el-button>
@@ -509,6 +509,36 @@ const analysisConfig = ref({
   detectFace: true
 })
 
+// 模型单选项：准确率从后端实时获取
+const modelRadioOptions = ref([
+  { value: 'cnn', label: 'CNN (83.77%)', recommended: true },
+  { value: 'vgg', label: 'VGG16 (80%)', recommended: false },
+  { value: 'se83', label: 'SE-Net (83%)', recommended: true }
+])
+
+async function loadModelOptions() {
+  try {
+    const response = await api.get('/models')
+    const models = response.data.models || []
+    if (models.length) {
+      modelRadioOptions.value = models
+        .filter((m) => ['cnn', 'vgg', 'se83'].includes(m.name))
+        .map((m) => {
+          const acc = typeof m.accuracy === 'number' && m.accuracy <= 1
+            ? (m.accuracy * 100).toFixed(2)
+            : m.accuracy
+          return {
+            value: m.name,
+            label: `${m.display_name || m.name.toUpperCase()} (${acc}%)`,
+            recommended: m.name === 'cnn' || m.name === 'se83'
+          }
+        })
+    }
+  } catch (error) {
+    // 后端不可用时保留静态兜底
+  }
+}
+
 // 计算属性
 const estimatedFrames = computed(() => {
   if (!videoStore.currentVideo) return 0
@@ -518,13 +548,8 @@ const estimatedFrames = computed(() => {
 })
 
 const analysisStatusText = computed(() => {
-  if (videoStore.analysisProgress < 30) {
-    return '正在提取视频帧...'
-  } else if (videoStore.analysisProgress < 90) {
-    return '正在进行情绪识别...'
-  } else {
-    return '正在生成分析报告...'
-  }
+  const frames = estimatedFrames.value || analysisConfig.value.maxFrames
+  return `服务器正在逐帧分析（约 ${frames} 帧）· 已耗时 ${analysisElapsed.value} 秒，请耐心等待`
 })
 
 const currentFrame = computed(() => {
@@ -565,26 +590,24 @@ async function uploadVideo() {
 
   try {
     videoStore.startUpload()
-    
+
     const formData = new FormData()
     formData.append('video', selectedFile.value)
 
-    // 模拟上传进度
-    const progressInterval = setInterval(() => {
-      if (videoStore.uploadProgress < 90) {
-        videoStore.setUploadProgress(videoStore.uploadProgress + 10)
-      }
-    }, 200)
-
-    // 🔑 使用 api 而不是 axios，会自动附加 Authorization header（如果已登录）
+    // 真实上传进度（axios onUploadProgress）
     const response = await api.post('/video/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
-      timeout: 300000  // 5分钟超时，适用于大视频文件上传
+      timeout: 300000,  // 5分钟超时，适用于大视频文件上传
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100)
+          videoStore.setUploadProgress(Math.min(percent, 100))
+        }
+      }
     })
 
-    clearInterval(progressInterval)
     videoStore.finishUpload()
 
     if (response.data.success) {
@@ -603,6 +626,11 @@ async function uploadVideo() {
   }
 }
 
+// 分析耗时计时器（用于展示诚实的进度信息）
+let analysisTimer = null
+let analysisStartTime = 0
+const analysisElapsed = ref(0)
+
 async function startAnalysis() {
   if (!videoStore.currentVideo) {
     ElMessage.warning('请先上传视频')
@@ -613,11 +641,15 @@ async function startAnalysis() {
     currentStep.value = 2
     videoStore.startAnalysis()
 
-    // 模拟分析进度
-    const progressInterval = setInterval(() => {
-      if (videoStore.analysisProgress < 85) {
-        videoStore.setAnalysisProgress(videoStore.analysisProgress + 5)
-      }
+    // 后端暂无进度接口：进度条按耗时渐进逼近 90%（完成时立即到 100%），
+    // 同时展示已耗时与预计帧数，如实反映分析状态
+    analysisStartTime = Date.now()
+    analysisElapsed.value = 0
+    clearInterval(analysisTimer)
+    analysisTimer = setInterval(() => {
+      analysisElapsed.value = Math.floor((Date.now() - analysisStartTime) / 1000)
+      const asymptotic = 90 * (1 - Math.exp(-analysisElapsed.value / 45))
+      videoStore.setAnalysisProgress(Math.min(90, Math.round(asymptotic)))
     }, 500)
 
     // 🔑 使用 api 而不是 axios，会自动附加 Authorization header
@@ -632,34 +664,30 @@ async function startAnalysis() {
       timeout: 600000  // 10分钟超时（600秒）
     })
 
-    clearInterval(progressInterval)
+    clearInterval(analysisTimer)
+    videoStore.setAnalysisProgress(100)
     videoStore.finishAnalysis()
 
-    console.log('🔍 [VideoAnalysis] 收到后端响应:', response.data)
-    console.log('🔍 [VideoAnalysis] success 字段类型:', typeof response.data.success, '值:', response.data.success)
-
     if (response.data && response.data.success === true) {
-      console.log('✅ [VideoAnalysis] 开始设置分析结果')
       videoStore.setAnalysisResults(response.data)
       currentStep.value = 3
       currentFrameIndex.value = 0
-      
+
       ElNotification({
         title: '分析完成',
-        message: `成功分析 ${response.data.total_frames} 帧图像`,
+        message: `成功分析 ${response.data.total_frames} 帧图像，耗时 ${analysisElapsed.value} 秒`,
         type: 'success',
         duration: 3000
       })
     } else {
-      console.error('❌ [VideoAnalysis] 后端返回数据格式错误:', response.data)
       ElMessage.error('视频分析响应格式错误')
       currentStep.value = 1
     }
   } catch (error) {
+    clearInterval(analysisTimer)
     videoStore.finishAnalysis()
     currentStep.value = 1
-    console.error('❌ [VideoAnalysis] 视频分析异常:', error)
-    console.error('❌ [VideoAnalysis] 错误详情:', error.response?.data)
+    console.error('视频分析异常:', error)
     ElMessage.error(error.response?.data?.error || '视频分析失败')
   }
 }
@@ -687,9 +715,52 @@ function resetAnalysis() {
   clearSelection()
 }
 
-function downloadReport() {
-  ElMessage.info('报告导出功能开发中...')
-  // TODO: 实现报告导出功能
+// 报告导出：截图结果区域并生成 PDF（与数据分析页同一方案）
+const resultsRef = ref(null)
+const isExporting = ref(false)
+
+async function downloadReport() {
+  if (!resultsRef.value || isExporting.value) return
+  isExporting.value = true
+  try {
+    ElMessage.info('正在生成 PDF 报告，请稍候...')
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf')
+    ])
+
+    const canvas = await html2canvas(resultsRef.value, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff'
+    })
+
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const imgWidth = pageWidth - 20
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+    let heightLeft = imgHeight
+    let position = 10
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 10, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight - 20
+
+    while (heightLeft > 0) {
+      pdf.addPage()
+      position = 10 - (imgHeight - heightLeft)
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 10, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight - 20
+    }
+
+    pdf.save(`video_emotion_report_${new Date().toISOString().split('T')[0]}.pdf`)
+    ElMessage.success('报告导出成功！')
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败：' + error.message)
+  } finally {
+    isExporting.value = false
+  }
 }
 
 function formatFileSize(bytes) {
@@ -730,7 +801,7 @@ function getEmotionColor(emotion) {
   const colorMap = {
     '生气': '#f56c6c',
     '厌恶': '#e6a23c',
-    '害怕': '#909399',
+    '害怕': 'var(--color-mahogany)',
     '高兴': '#67c23a',
     '平静': '#409eff',
     '悲伤': '#5470c6',
@@ -741,12 +812,12 @@ function getEmotionColor(emotion) {
 
 // 组件挂载时恢复数据
 onMounted(() => {
+  loadModelOptions()
   // 如果有保存的分析结果，自动跳转到结果页
   if (videoStore.hasResults) {
     currentStep.value = 3
     currentFrameIndex.value = 0
-    console.log('✅ 已恢复上次的视频分析结果')
-    
+
     ElNotification({
       title: '数据已恢复',
       message: '已自动恢复上次的视频分析结果',
@@ -768,7 +839,7 @@ onMounted(() => {
   text-align: center;
   margin-bottom: 30px;
   padding: 20px;
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  background: var(--el-color-primary-light-9);
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
@@ -822,11 +893,11 @@ onMounted(() => {
   font-size: 1.2rem;
   font-weight: 600;
   margin-bottom: 10px;
-  color: #303133;
+  color: var(--color-ink);
 }
 
 .upload-hint {
-  color: #909399;
+  color: var(--color-mahogany);
   margin: 5px 0;
 }
 
@@ -913,7 +984,7 @@ onMounted(() => {
 
 .config-hint {
   margin: 8px 0;
-  color: #606266;
+  color: var(--color-mahogany);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -969,7 +1040,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--color-ink);
   font-size: 28px;
 }
 
@@ -980,13 +1051,13 @@ onMounted(() => {
 .stat-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 5px;
 }
 
 .stat-label {
   font-size: 0.9rem;
-  color: #909399;
+  color: var(--color-mahogany);
 }
 
 .timeline-card,
@@ -997,7 +1068,7 @@ onMounted(() => {
 
 .emotion-flow {
   padding: 20px;
-  background: linear-gradient(135deg, #6366F115 0%, #8B5CF615 100%);
+  background: linear-gradient(135deg, var(--color-accent)15 0%, var(--color-accent)15 100%);
   border-radius: 8px;
   margin-bottom: 20px;
 }
@@ -1005,7 +1076,7 @@ onMounted(() => {
 .flow-text {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-ink);
   margin-top: 10px;
 }
 
@@ -1037,7 +1108,7 @@ onMounted(() => {
 
 .image-container h4 {
   margin-bottom: 10px;
-  color: #606266;
+  color: var(--color-mahogany);
   width: 100%;
   text-align: left;
 }
@@ -1049,7 +1120,7 @@ onMounted(() => {
   object-fit: contain; /* 保持比例，完整显示 */
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  background-color: #f5f7fa; /* 添加背景色以便看清边界 */
+  background-color: var(--el-color-primary-light-9); /* 添加背景色以便看清边界 */
 }
 
 .frame-analysis {
@@ -1061,7 +1132,7 @@ onMounted(() => {
   align-items: center;
   gap: 20px;
   padding: 20px;
-  background: linear-gradient(135deg, #f093fb15 0%, #f5576c15 100%);
+  background: var(--el-color-primary-light-9);
   border-radius: 12px;
 }
 
@@ -1081,7 +1152,7 @@ onMounted(() => {
   display: block;
   margin-bottom: 5px;
   font-weight: 500;
-  color: #606266;
+  color: var(--color-mahogany);
 }
 
 .frame-slider {
@@ -1092,7 +1163,7 @@ onMounted(() => {
   text-align: center;
   padding: 20px;
   border-radius: 8px;
-  background: #f5f7fa;
+  background: var(--el-color-primary-light-9);
   margin-bottom: 15px;
 }
 
@@ -1112,7 +1183,7 @@ onMounted(() => {
 
 .stat-count {
   margin-top: 10px;
-  color: #909399;
+  color: var(--color-mahogany);
 }
 
 .final-actions {

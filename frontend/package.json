@@ -1,7 +1,7 @@
 {
-  "name": "emotion-recognition-frontend",
+  "name": "facelens-frontend",
   "version": "2.0.0",
-  "description": "人脸情绪识别系统-前端 (多页面版)",
+  "description": "FaceLens — 基于 RAF-DB 的人脸情绪识别系统前端 (Vue 3 + Element Plus)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

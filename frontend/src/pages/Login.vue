@@ -19,8 +19,7 @@
       <!-- 头部 -->
       <div class="login-header">
         <div class="logo">
-          <img class="logo-icon" src="@/assets/brand/logo.png" alt="情绪识别系统" />
-          <h1>情绪识别系统</h1>
+          <h1 class="wordmark">FaceLens</h1>
         </div>
         <p class="subtitle">欢迎回来，请登录您的账户</p>
       </div>
@@ -207,7 +206,7 @@
 
     <!-- 底部信息 -->
     <div class="login-footer">
-      <p>&copy; 2026 情绪识别系统. All rights reserved.</p>
+      <p>&copy; 2026 FaceLens. All rights reserved.</p>
       <div class="footer-links">
         <el-link type="info" @click="showTerms">用户协议</el-link>
         <el-link type="info" @click="showPrivacy">隐私政策</el-link>
@@ -219,7 +218,7 @@
     <el-dialog v-model="termsDialog" title="用户协议" width="70%" max-height="80vh">
       <div class="terms-content">
         <h3>1. 服务条款</h3>
-        <p>欢迎使用情绪识别系统。本系统基于深度学习技术，提供人脸情绪识别服务。</p>
+        <p>欢迎使用 FaceLens。本系统基于深度学习技术，提供人脸情绪识别服务。</p>
         
         <h3>2. 用户责任</h3>
         <p>用户应确保上传的图片符合相关法律法规，不得上传违法违规内容。</p>
@@ -260,7 +259,6 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api/client'
 import { useUserStore } from '../stores/user'
 
@@ -402,6 +400,12 @@ const handleLogin = async () => {
     })
     
     if (result.success) {
+      // 记住我：保存用户名便于下次登录
+      if (rememberMe.value) {
+        localStorage.setItem('rememberedUsername', loginForm.username)
+      } else {
+        localStorage.removeItem('rememberedUsername')
+      }
       // 跳转到首页或重定向页面
       const redirect = router.currentRoute.value.query.redirect || '/'
       router.push(redirect)
@@ -474,7 +478,7 @@ const showPrivacy = () => {
 
 // 显示帮助中心
 const showHelp = () => {
-  ElMessage.info('帮助中心页面开发中...')
+  router.push('/help')
 }
 
 // 组件挂载时的处理
@@ -483,12 +487,19 @@ onMounted(() => {
   if (userStore.isLoggedIn) {
     router.push('/')
   }
-  
-  // 检查URL参数，看是否需要显示特定模式
-  const urlParams = new URLSearchParams(window.location.search)
-  if (urlParams.get('mode') === 'register') {
+
+  // "记住我"：回填上次登录的用户名
+  const remembered = localStorage.getItem('rememberedUsername')
+  if (remembered) {
+    loginForm.username = remembered
+    rememberMe.value = true
+  }
+
+  // 检查路由参数（hash 模式下参数位于 route.query），决定初始模式
+  const mode = router.currentRoute.value.query.mode
+  if (mode === 'register') {
     switchToRegister()
-  } else if (urlParams.get('mode') === 'forgot') {
+  } else if (mode === 'forgot') {
     forgotPassword()
   }
 })
@@ -501,7 +512,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #F6F7FB 0%, #EEF2FF 50%, #F6F7FB 100%);
+  background: linear-gradient(135deg, var(--color-parchment) 0%, var(--el-color-primary-light-9) 50%, var(--color-parchment) 100%);
   position: relative;
   overflow: hidden;
   padding: 2rem;
@@ -523,10 +534,10 @@ onMounted(() => {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(79, 70, 229, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(79, 70, 229, 0.035) 1px, transparent 1px),
-    radial-gradient(circle at 18% 22%, rgba(99, 102, 241, 0.10) 0%, transparent 45%),
-    radial-gradient(circle at 82% 76%, rgba(139, 92, 246, 0.10) 0%, transparent 45%);
+    linear-gradient(rgba(24, 24, 27, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 24, 27, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 18% 22%, rgba(24, 24, 27, 0.10) 0%, transparent 45%),
+    radial-gradient(circle at 82% 76%, rgba(24, 24, 27, 0.10) 0%, transparent 45%);
   background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
 }
 
@@ -542,7 +553,7 @@ onMounted(() => {
 .orb-1 {
   width: 420px;
   height: 420px;
-  background: #C7D2FE;
+  background: var(--color-sand);
   top: -140px;
   left: -110px;
   animation: orbDrift 16s ease-in-out infinite;
@@ -551,7 +562,7 @@ onMounted(() => {
 .orb-2 {
   width: 360px;
   height: 360px;
-  background: #DDD6FE;
+  background: var(--color-sand);
   bottom: -140px;
   right: -100px;
   animation: orbDrift 19s ease-in-out infinite reverse;
@@ -560,7 +571,7 @@ onMounted(() => {
 .orb-3 {
   width: 240px;
   height: 240px;
-  background: #E0E7FF;
+  background: var(--el-color-primary-light-9);
   top: 42%;
   right: 14%;
   opacity: 0.4;
@@ -585,7 +596,7 @@ onMounted(() => {
 .shape {
   position: absolute;
   border-radius: 50%;
-  background: rgba(26, 36, 86, 0.05);
+  background: rgba(24, 24, 27, 0.05);
   animation: float 6s ease-in-out infinite;
 }
 
@@ -642,7 +653,7 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   transition: all 0.3s ease;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--color-sand);
 }
 
 .login-card:hover {
@@ -664,25 +675,16 @@ onMounted(() => {
   margin-bottom: 1rem;
 }
 
-.logo-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  object-fit: cover;
-  display: block;
-  flex-shrink: 0;
-}
-
-.logo h1 {
-  font-size: 1.8rem;
-  font-weight: bold;
-  color: #1A2456;
+.wordmark {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   margin: 0;
-  letter-spacing: 0.01em;
+  color: var(--color-ink);
 }
 
 .subtitle {
-  color: rgba(26, 36, 86, 0.7);
+  color: var(--color-mahogany);
   font-size: 1rem;
   margin: 0;
 }
@@ -710,23 +712,23 @@ onMounted(() => {
 .register-form .el-input__wrapper,
 .forgot-form .el-input__wrapper {
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e4e7ed;
+  box-shadow: none;
+  border: 1px solid var(--color-sand);
   transition: all 0.3s ease;
 }
 
 .login-form .el-input__wrapper:hover,
 .register-form .el-input__wrapper:hover,
 .forgot-form .el-input__wrapper:hover {
-  border-color: #1A2456;
-  box-shadow: 0 4px 12px rgba(26, 36, 86, 0.15);
+  border-color: var(--color-ink);
+  box-shadow: 0 4px 12px rgba(24, 24, 27, 0.12);
 }
 
 .login-form .el-input__wrapper.is-focus,
 .register-form .el-input__wrapper.is-focus,
 .forgot-form .el-input__wrapper.is-focus {
-  border-color: #1A2456;
-  box-shadow: 0 0 0 2px rgba(26, 36, 86, 0.2);
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.16);
 }
 
 /* 表单选项 */
@@ -746,7 +748,7 @@ onMounted(() => {
   border-radius: 12px;
   font-size: 1.1rem;
   font-weight: 600;
-  background: var(--el-color-primary, #4F46E5);
+  background: var(--el-color-primary, var(--color-accent));
   border: none;
   transition: all 0.3s ease;
 }
@@ -755,7 +757,7 @@ onMounted(() => {
 .register-btn:hover,
 .forgot-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 20px rgba(24, 24, 27, 0.22);
 }
 
 /* 链接样式 */
@@ -763,7 +765,7 @@ onMounted(() => {
 .login-link {
   text-align: center;
   margin-top: 1.5rem;
-  color: #606266;
+  color: var(--color-mahogany);
 }
 
 .register-link span,
@@ -774,13 +776,13 @@ onMounted(() => {
 /* 忘记密码样式 */
 .forgot-form h3 {
   text-align: center;
-  color: #303133;
+  color: var(--color-ink);
   margin-bottom: 0.5rem;
 }
 
 .forgot-desc {
   text-align: center;
-  color: #606266;
+  color: var(--color-mahogany);
   margin-bottom: 2rem;
   line-height: 1.6;
 }
@@ -797,7 +799,7 @@ onMounted(() => {
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
-  color: rgba(26, 36, 86, 0.55);
+  color: var(--color-mahogany);
   z-index: 1;
 }
 
@@ -822,14 +824,14 @@ onMounted(() => {
 
 .terms-content h3,
 .privacy-content h3 {
-  color: #303133;
+  color: var(--color-ink);
   margin: 1.5rem 0 0.75rem 0;
   font-size: 1.1rem;
 }
 
 .terms-content p,
 .privacy-content p {
-  color: #606266;
+  color: var(--color-mahogany);
   line-height: 1.6;
   margin-bottom: 1rem;
 }
@@ -845,7 +847,7 @@ onMounted(() => {
     margin: 1rem;
   }
   
-  .logo h1 {
+  .wordmark {
     font-size: 1.5rem;
   }
 
@@ -861,7 +863,7 @@ onMounted(() => {
   color: #e0e0e0;
 }
 
-.dark .logo h1 {
+.dark .wordmark {
   color: #e0e0e0;
 }
 
@@ -880,7 +882,7 @@ onMounted(() => {
 }
 
 .dark .el-input__placeholder {
-  color: #909399;
+  color: var(--color-mahogany);
 }
 
 .dark .register-link,
@@ -897,8 +899,8 @@ onMounted(() => {
   background-image:
     linear-gradient(rgba(129, 140, 248, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(129, 140, 248, 0.05) 1px, transparent 1px),
-    radial-gradient(circle at 18% 22%, rgba(99, 102, 241, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 82% 76%, rgba(139, 92, 246, 0.16) 0%, transparent 45%);
+    radial-gradient(circle at 18% 22%, rgba(24, 24, 27, 0.16) 0%, transparent 45%),
+    radial-gradient(circle at 82% 76%, rgba(24, 24, 27, 0.16) 0%, transparent 45%);
   background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
 }
 
@@ -947,7 +949,7 @@ onMounted(() => {
 
 /* 复选框样式 */
 :deep(.el-checkbox__label) {
-  color: #606266;
+  color: var(--color-mahogany);
   font-size: 0.9rem;
 }
 
@@ -958,12 +960,12 @@ onMounted(() => {
 /* 分割线样式 */
 :deep(.el-divider__text) {
   background: rgba(255, 255, 255, 0.95);
-  color: #909399;
+  color: var(--color-mahogany);
   font-size: 0.9rem;
 }
 
 .dark :deep(.el-divider__text) {
   background: rgba(44, 44, 44, 0.95);
-  color: #909399;
+  color: var(--color-mahogany);
 }
 </style>

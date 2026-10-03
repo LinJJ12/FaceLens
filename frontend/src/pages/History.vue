@@ -1,9 +1,14 @@
 <template>
   <div class="history-view">
-    <el-card class="history-card">
+    <el-card class="history-card" v-loading="loading">
       <template #header>
         <div class="card-header">
           <h2>识别历史记录</h2>
+          <div class="header-meta">
+            <el-tag v-if="serverAvailable" type="success" size="small" effect="plain">服务端同步</el-tag>
+            <el-tag v-else type="warning" size="small" effect="plain">本地数据</el-tag>
+            <el-button size="small" :icon="Refresh" :loading="loading" @click="loadAll">刷新</el-button>
+          </div>
         </div>
       </template>
 
@@ -35,13 +40,13 @@
             <el-button @click="resetSearch">重置</el-button>
           </el-form-item>
           <el-form-item>
-            <el-button type="info" @click="analyzeStorage">分析存储空间</el-button>
+            <el-button type="info" plain @click="analyzeStorage">分析存储空间</el-button>
           </el-form-item>
           <el-form-item>
-            <el-button type="warning" @click="cleanupStorage">清理存储空间</el-button>
+            <el-button type="warning" plain @click="cleanupStorage">清理本地图片</el-button>
           </el-form-item>
           <el-form-item>
-            <el-button type="danger" @click="batchDelete" :disabled="selectedRecords.length === 0">
+            <el-button type="danger" plain @click="batchDelete" :disabled="selectedRecords.length === 0">
               批量删除 ({{ selectedRecords.length }})
             </el-button>
           </el-form-item>
@@ -49,8 +54,8 @@
       </div>
 
       <div v-if="filteredPredictions.length > 0">
-        <el-table 
-          :data="filteredPredictions" 
+        <el-table
+          :data="filteredPredictions"
           style="width: 100%"
           @selection-change="handleSelectionChange"
         >
@@ -70,10 +75,20 @@
 
           <el-table-column prop="model_used" label="模型" width="100" />
 
-          <el-table-column label="来源" width="140">
+          <el-table-column label="来源" width="150">
             <template #default="{ row }">
-              <el-tag v-if="row.source === 'video'" type="success">视频帧 #{{ row.frame_number }}</el-tag>
-              <el-tag v-else type="primary">图片识别</el-tag>
+              <el-tag v-if="row.source === 'video'" type="success">
+                视频 {{ row.video_time || `帧 #${row.frame_number ?? ''}` }}
+              </el-tag>
+              <el-tag v-else effect="plain">图片识别</el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="存储" width="90">
+            <template #default="{ row }">
+              <el-tag :type="row.origin === 'server' ? 'success' : 'info'" size="small" effect="plain">
+                {{ row.origin === 'server' ? '服务端' : '本地' }}
+              </el-tag>
             </template>
           </el-table-column>
 
@@ -83,8 +98,8 @@
 
           <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" type="primary" @click="viewDetails(row)">查看详情</el-button>
-              <el-button size="small" type="danger" @click="deleteRecord(row)">删除</el-button>
+              <el-button size="small" type="primary" plain @click="viewDetails(row)">查看详情</el-button>
+              <el-button size="small" type="danger" plain @click="deleteRecord(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -92,10 +107,10 @@
         <div class="search-result-info" v-if="isSearching">共找到 {{ filteredPredictions.length }} 条记录</div>
       </div>
 
-      <el-empty v-else :description="isSearching ? '未找到符合条件的记录' : '暂无识别记录'" />
+      <el-empty v-else :description="loading ? '正在加载历史记录...' : (isSearching ? '未找到符合条件的记录' : '暂无识别记录')" />
     </el-card>
 
-    <el-dialog v-model="showDetailDialog" title="📊 识别详情" width="900px" :close-on-click-modal="false">
+    <el-dialog v-model="showDetailDialog" title="识别详情" width="900px" :close-on-click-modal="false">
       <div v-if="selectedPrediction" class="result-content">
         <div class="image-compare" v-if="selectedPrediction.imageUrl || selectedPrediction.preprocessed_image">
           <div class="image-box">
@@ -141,9 +156,9 @@
         </div>
 
         <div class="meta-info">
-          <el-tag>模型: {{ selectedPrediction.model_used }}</el-tag>
-          <el-tag type="info">时间: {{ formatFullTime(selectedPrediction.timestamp) }}</el-tag>
-          <el-tag v-if="selectedPrediction.id" type="warning">编号: {{ selectedPrediction.id }}</el-tag>
+          <el-tag effect="plain">模型: {{ selectedPrediction.model_used }}</el-tag>
+          <el-tag type="info" effect="plain">时间: {{ formatFullTime(selectedPrediction.timestamp) }}</el-tag>
+          <el-tag v-if="selectedPrediction.serverId" type="warning" effect="plain">编号: #{{ selectedPrediction.serverId }}</el-tag>
         </div>
       </div>
       <template #footer>
@@ -155,107 +170,144 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { useEmotionStore } from '../stores/emotion'
 import { useVideoStore } from '../stores/video'
 import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { printStorageReport } from '../utils/storageAnalyzer'
+import { resolveAssetUrl } from '../utils/assets'
 import dbHelper, { STORES } from '../utils/indexedDB'
 
 const emotionStore = useEmotionStore()
 const videoStore = useVideoStore()
 
-// 组件挂载时确保数据已加载
+const loading = ref(false)
+const serverAvailable = ref(false)
+
+// 挂载时同时加载服务端历史与本地缓存
 onMounted(async () => {
-  console.log('📜 [History] 组件挂载，检查数据加载状态')
-  console.log('📸 图片预测数据:', emotionStore.predictions.length, '条')
-  console.log('🎬 视频历史数据:', videoStore.videoHistory.length, '条')
-  
-  // 如果数据为空，尝试重新加载
+  await loadAll()
+  // 本地缓存为空时兜底重载一次
   if (emotionStore.predictions.length === 0) {
-    console.log('⚠️ 图片预测数据为空，尝试重新加载...')
     await emotionStore.loadFromStorage()
-  }
-  
-  // 打印第一条数据用于调试
-  if (emotionStore.predictions.length > 0) {
-    const firstPred = emotionStore.predictions[0]
-    console.log('📊 第一条图片预测数据（原始）:', {
-      emotion: firstPred.emotion,
-      model: firstPred.model,
-      hasImage: !!firstPred.image,
-      hasOriginalImage: !!firstPred.original_image,
-      hasFaceImage: !!firstPred.face_image,
-      imageLength: firstPred.image?.length,
-      originalImageLength: firstPred.original_image?.length,
-      faceImageLength: firstPred.face_image?.length,
-      allKeys: Object.keys(firstPred)
-    })
   }
 })
 
-// 合并图片识别和视频分析的所有历史记录（仅当前会话的本地数据）
+async function loadAll() {
+  loading.value = true
+  try {
+    // 并行：拉取服务端历史 + 确保本地缓存已加载
+    await Promise.all([
+      emotionStore.fetchServerHistories(100, 3),
+      emotionStore.predictions.length === 0 ? emotionStore.loadFromStorage() : Promise.resolve()
+    ])
+    serverAvailable.value = !emotionStore.serverHistoriesError
+  } finally {
+    loading.value = false
+  }
+}
+
+// 服务端记录 → 展示结构（图片经 /api/uploads 鉴权加载）
+function mapServerRecord(rec) {
+  const isVideo = (rec.input_type || 'image') === 'video'
+  const frameTs = typeof rec.frame_timestamp === 'number' ? rec.frame_timestamp : null
+  const mm = frameTs !== null ? String(Math.floor(frameTs / 60)).padStart(2, '0') : null
+  const ss = frameTs !== null ? String(Math.floor(frameTs % 60)).padStart(2, '0') : null
+  return {
+    id: `server-${rec.id}`,
+    serverId: rec.id,
+    historyId: rec.id,
+    emotion: rec.emotion,
+    emotion_cn: rec.emotion_cn,
+    confidence: rec.confidence,
+    model_used: rec.model_used,
+    timestamp: rec.created_at,
+    source: isVideo ? 'video' : 'image',
+    frame_number: rec.frame_index,
+    video_time: mm !== null ? `${mm}:${ss}` : '',
+    imageUrl: resolveAssetUrl(rec.original_image_path || rec.thumbnail_path || rec.preprocessed_image_path),
+    preprocessed_image: resolveAssetUrl(rec.preprocessed_image_path || rec.thumbnail_path),
+    probabilities: rec.probabilities?.en || null,
+    probabilities_cn: rec.probabilities?.cn || null,
+    origin: 'server'
+  }
+}
+
+// 本地图片预测 → 展示结构
+function mapLocalPrediction(pred) {
+  return {
+    ...pred,
+    id: `local-${pred.id}`,
+    historyId: pred.history_id ?? null,
+    imageUrl: pred.original_image || pred.image,
+    preprocessed_image: pred.face_image || pred.preprocessed_image,
+    model_used: pred.model_used || pred.model,
+    source: 'image',
+    origin: 'local'
+  }
+}
+
+// 本地视频帧 → 展示结构
+function mapLocalVideoFrame(frame, video) {
+  return {
+    emotion: frame.emotion,
+    emotion_cn: frame.emotion_cn,
+    confidence: frame.confidence,
+    timestamp: video.timestamp,
+    video_time: frame.time_formatted,
+    model_used: video.model || 'CNN',
+    source: 'video',
+    video_id: video.video_id,
+    localVideoDbId: video.id,
+    frame_number: frame.frame_number || frame.frame_index,
+    imageUrl: frame.original_frame,
+    preprocessed_image: frame.face_image,
+    probabilities_cn: frame.probabilities_cn,
+    probabilities: frame.probabilities,
+    origin: 'local'
+  }
+}
+
+// 合并记录：服务端优先，本地补遗（无服务端ID的旧记录）
 const allHistoryRecords = computed(() => {
-  // 映射图片识别数据的字段名
-  const imagePredictions = (emotionStore.predictions || []).map((pred, index) => {
-    const mapped = {
-      ...pred,
-      // 映射图片字段到详情对话框期望的字段
-      imageUrl: pred.original_image || pred.image,  // 原始图片
-      preprocessed_image: pred.face_image,  // 人脸区域
-      model_used: pred.model,
-      source: 'image'
-    }
-    
-    // 调试：打印映射后的数据（仅第一条）
-    if (index === 0 && pred) {
-      console.log('🔍 映射后的图片预测数据（第一条）:', {
-        hasImageUrl: !!mapped.imageUrl,
-        hasPreprocessedImage: !!mapped.preprocessed_image,
-        model_used: mapped.model_used,
-        imageUrlLength: mapped.imageUrl?.length,
-        preprocessedImageLength: mapped.preprocessed_image?.length
+  const records = []
+  const serverOk = serverAvailable.value
+
+  if (serverOk) {
+    const serverVideoExists = emotionStore.serverHistories.some((r) => (r.input_type || 'image') === 'video')
+    const serverHistoryIds = new Set(
+      emotionStore.serverHistories.map((r) => r.id)
+    )
+
+    records.push(...emotionStore.serverHistories.map(mapServerRecord))
+
+    // 本地图片预测中没有服务端ID的（历史遗留/离线数据）
+    ;(emotionStore.predictions || []).forEach((pred) => {
+      if (pred.history_id && serverHistoryIds.has(pred.history_id)) return
+      if (pred.history_id) return // 服务端已有同ID记录（可能超出分页范围）
+      records.push(mapLocalPrediction(pred))
+    })
+
+    // 服务端没有任何视频帧记录时，用本地视频历史兜底展示
+    if (!serverVideoExists) {
+      ;(videoStore.videoHistory || []).forEach((video) => {
+        if (video.results?.timeline && Array.isArray(video.results.timeline)) {
+          video.results.timeline.forEach((frame) => records.push(mapLocalVideoFrame(frame, video)))
+        }
       })
     }
-    
-    return mapped
-  })
-  
-  const videoPredictions = []
-  
-  // 从视频历史记录中提取所有帧的预测结果
-  if (videoStore.videoHistory && Array.isArray(videoStore.videoHistory)) {
-    videoStore.videoHistory.forEach(video => {
-      if (video.results && video.results.timeline && Array.isArray(video.results.timeline)) {
-        video.results.timeline.forEach(frame => {
-          videoPredictions.push({
-            emotion: frame.emotion,
-            emotion_cn: frame.emotion_cn,
-            confidence: frame.confidence,
-            // 使用视频分析的时间戳，而不是视频中的相对时间
-            timestamp: video.timestamp,
-            // 保留视频内的相对时间用于显示
-            video_time: frame.time_formatted,  // 视频时间戳（如 "00:05"）
-            time_formatted: frame.time_formatted,
-            model_used: video.model || 'CNN',
-            source: 'video',
-            video_id: video.video_id,
-            frame_number: frame.frame_number || frame.frame_index,
-            // 映射视频帧的图片字段到详情对话框期望的字段
-            imageUrl: frame.original_frame,  // 原始视频帧
-            preprocessed_image: frame.face_image,  // 检测到的人脸
-            // 保留概率分布
-            probabilities_cn: frame.probabilities_cn,
-            probabilities: frame.probabilities
-          })
-        })
+  } else {
+    // 服务端不可用：完整本地合并
+    ;(emotionStore.predictions || []).forEach((pred) => records.push(mapLocalPrediction(pred)))
+    ;(videoStore.videoHistory || []).forEach((video) => {
+      if (video.results?.timeline && Array.isArray(video.results.timeline)) {
+        video.results.timeline.forEach((frame) => records.push(mapLocalVideoFrame(frame, video)))
       }
     })
   }
-  
-  return [...imagePredictions, ...videoPredictions].sort((a, b) => 
-    new Date(b.timestamp) - new Date(a.timestamp)
-  )
+
+  return records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
 })
 
 // 详情对话框相关状态
@@ -278,23 +330,22 @@ const filteredPredictions = computed(() => {
   if (!isSearching.value) {
     return allHistoryRecords.value
   }
-  
+
   return allHistoryRecords.value.filter(prediction => {
     // 情绪过滤
     if (searchForm.value.emotion) {
-      // 尝试匹配emotion_cn，如果不存在则使用emotion字段的中文映射
-      const hasMatch = 
+      const hasMatch =
         (prediction.emotion_cn && prediction.emotion_cn === searchForm.value.emotion) ||
         (prediction.emotion && cnToEnMap[searchForm.value.emotion] === prediction.emotion)
-      
+
       if (!hasMatch) return false
     }
-    
+
     // 模型过滤
-    if (searchForm.value.model && !prediction.model_used.includes(searchForm.value.model)) {
+    if (searchForm.value.model && !String(prediction.model_used || '').includes(searchForm.value.model)) {
       return false
     }
-    
+
     // 时间范围过滤
     if (searchForm.value.dateRange && searchForm.value.dateRange.length === 2) {
       const [startDate, endDate] = searchForm.value.dateRange
@@ -303,7 +354,7 @@ const filteredPredictions = computed(() => {
         return false
       }
     }
-    
+
     return true
   })
 })
@@ -323,11 +374,11 @@ function resetSearch() {
   isSearching.value = false
 }
 
-// 清理存储空间（移除历史记录中的图片数据）
+// 清理本地 IndexedDB 中的图片数据（真实本地功能）
 async function cleanupStorage() {
   ElMessageBox.confirm(
-    '此操作将清理历史记录中的图片数据以释放存储空间，但会保留情绪分析结果和统计信息。是否继续？',
-    '清理存储空间',
+    '此操作将清理本地缓存中的图片数据以释放浏览器存储空间，但会保留情绪分析结果和统计信息（服务端记录不受影响）。是否继续？',
+    '清理本地图片缓存',
     {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
@@ -335,7 +386,6 @@ async function cleanupStorage() {
     }
   ).then(async () => {
     try {
-      // 统一从 EmotionStore 获取当前用户名（异步，确保与 IndexedDB 用户隔离一致）
       let username = 'guest'
       if (emotionStore.getCurrentUsername) {
         try {
@@ -343,17 +393,10 @@ async function cleanupStorage() {
           if (u) username = u
         } catch {}
       }
-      
-      // 🧹 清理 IndexedDB 中的视频历史图片数据
-      console.log('🧹 [清理] 开始清理 IndexedDB 视频历史数据...')
-      
-      // 1. 获取当前用户的所有视频历史记录
+
       const videoHistory = await dbHelper.getByIndex(STORES.VIDEO_HISTORY, 'username', username)
-      
+
       if (videoHistory && videoHistory.length > 0) {
-        console.log(`📊 找到 ${videoHistory.length} 条视频历史记录`)
-        
-        // 2. 清理每条记录中的图片数据
         for (const item of videoHistory) {
           const cleanedItem = {
             ...item,
@@ -369,19 +412,13 @@ async function cleanupStorage() {
                 confidence: frame.confidence,
                 probabilities: frame.probabilities,
                 probabilities_cn: frame.probabilities_cn
-                // 移除 original_frame, face_image 等图片字段
               })) || []
             }
           }
-          
-          // 更新 IndexedDB 中的记录
           await dbHelper.put(STORES.VIDEO_HISTORY, cleanedItem)
         }
-        
-        console.log('✅ 视频历史记录图片数据已清理')
       }
-      
-      // 3. 清理当前分析的图片数据
+
       const currentAnalysis = await dbHelper.get(STORES.VIDEO_ANALYSIS, username)
       if (currentAnalysis) {
         const cleanedAnalysis = {
@@ -401,24 +438,20 @@ async function cleanupStorage() {
             })) || []
           }
         }
-        
         await dbHelper.put(STORES.VIDEO_ANALYSIS, cleanedAnalysis)
-        console.log('✅ 当前视频分析图片数据已清理')
       }
-      
-      // 4. 清理图片预测历史（IndexedDB）
+
       const imageCount = await emotionStore.cleanupImageData?.()
       if (imageCount && imageCount > 0) {
-        console.log(`✅ 图片预测历史图片数据已清理: ${imageCount} 条`)
+        console.log(`已清理图片预测图片数据: ${imageCount} 条`)
       }
-      
-      ElMessage.success('存储空间清理完成！已移除所有历史记录中的图片数据')
-      
-      // 重新加载数据
+
+      ElMessage.success('本地图片缓存清理完成！服务端历史记录不受影响')
+
       await emotionStore.loadFromStorage?.()
       await videoStore.loadFromStorage?.()
     } catch (error) {
-      console.error('❌ 清理存储空间失败:', error)
+      console.error('清理本地存储失败:', error)
       ElMessage.error('清理失败：' + error.message)
     }
   }).catch(() => {
@@ -426,56 +459,49 @@ async function cleanupStorage() {
   })
 }
 
-// 分析存储空间使用情况（仅 IndexedDB）
+// 分析本地存储空间使用情况
 async function analyzeStorage() {
   try {
-    ElMessage.info('正在分析 IndexedDB 存储空间，请查看控制台...')
+    ElMessage.info('正在分析浏览器本地存储空间...')
     const report = await printStorageReport()
-    
-    // 构建弹窗消息
-    let message = `📊 IndexedDB 存储空间分析\n\n`
-    message += `�️ 总使用: ${report.indexedDB.totalMB} MB (${report.indexedDB.percentage}%)\n`
-    message += `� 存储限制: ${(report.indexedDB.limit / 1024 / 1024).toFixed(2)} MB\n`
-    message += `💚 可用空间: ${((report.indexedDB.limit - report.indexedDB.total) / 1024 / 1024).toFixed(2)} MB\n\n`
-    
-    // 详细信息
-    message += `📝 存储详情：\n`
-    message += `- 视频历史: ${report.indexedDB.stores.VIDEO_HISTORY?.count || 0} 条 (${report.indexedDB.stores.VIDEO_HISTORY?.sizeMB || 0} MB)\n`
-    message += `- 当前分析: ${report.indexedDB.stores.VIDEO_ANALYSIS?.count || 0} 条 (${report.indexedDB.stores.VIDEO_ANALYSIS?.sizeMB || 0} MB)\n`
-    message += `- 图片预测: ${report.indexedDB.stores.IMAGE_PREDICTIONS?.count || 0} 条 (${report.indexedDB.stores.IMAGE_PREDICTIONS?.sizeMB || 0} MB)\n`
-    message += `- 用户数据: ${report.indexedDB.stores.USER_DATA?.count || 0} 条 (${report.indexedDB.stores.USER_DATA?.sizeMB || 0} MB)\n`
-    message += `- 应用设置: ${report.indexedDB.stores.APP_SETTINGS?.count || 0} 条 (${report.indexedDB.stores.APP_SETTINGS?.sizeMB || 0} MB)\n\n`
-    
-    // 图片检测
-    const hasImages = 
+
+    const h = (v) => (v ?? 0)
+    let message = `总使用: ${report.indexedDB.totalMB} MB (${report.indexedDB.percentage}%)\n`
+    message += `存储限制: ${(report.indexedDB.limit / 1024 / 1024).toFixed(2)} MB\n`
+    message += `可用空间: ${((report.indexedDB.limit - report.indexedDB.total) / 1024 / 1024).toFixed(2)} MB\n\n`
+
+    message += `存储详情：\n`
+    message += `- 视频历史: ${h(report.indexedDB.stores.VIDEO_HISTORY?.count)} 条 (${h(report.indexedDB.stores.VIDEO_HISTORY?.sizeMB)} MB)\n`
+    message += `- 当前分析: ${h(report.indexedDB.stores.VIDEO_ANALYSIS?.count)} 条 (${h(report.indexedDB.stores.VIDEO_ANALYSIS?.sizeMB)} MB)\n`
+    message += `- 图片预测: ${h(report.indexedDB.stores.IMAGE_PREDICTIONS?.count)} 条 (${h(report.indexedDB.stores.IMAGE_PREDICTIONS?.sizeMB)} MB)\n`
+    message += `- 用户数据: ${h(report.indexedDB.stores.USER_DATA?.count)} 条 (${h(report.indexedDB.stores.USER_DATA?.sizeMB)} MB)\n`
+    message += `- 应用设置: ${h(report.indexedDB.stores.APP_SETTINGS?.count)} 条 (${h(report.indexedDB.stores.APP_SETTINGS?.sizeMB)} MB)\n\n`
+
+    const hasImages =
       report.indexedDB.stores.VIDEO_HISTORY?.hasImages ||
       report.indexedDB.stores.VIDEO_ANALYSIS?.hasImages ||
       report.indexedDB.stores.IMAGE_PREDICTIONS?.hasImages
-    
+
     if (hasImages) {
-      message += `🖼️ 检测到图片数据，可通过"清理存储空间"释放空间\n\n`
+      message += `检测到本地图片数据，可通过"清理本地图片"释放空间\n\n`
     }
-    
-    // 警告
+
     if (report.warnings.length > 0) {
-      message += `⚠️ 提示：\n`
+      message += `提示：\n`
       report.warnings.forEach(w => {
-        const icon = w.level === 'danger' ? '🔴' : w.level === 'warning' ? '🟡' : 'ℹ️'
-        message += `${icon} ${w.message}\n`
+        message += `- ${w.message}\n`
       })
     } else {
-      message += `✅ 存储使用正常`
+      message += `存储使用正常`
     }
-    
-    ElMessageBox.alert(message, 'IndexedDB 存储空间分析', {
+
+    ElMessageBox.alert(message.replace(/\n/g, '<br/>'), '浏览器本地存储分析', {
       confirmButtonText: '确定',
       type: report.indexedDB.percentage > 80 ? 'warning' : 'info',
-      dangerouslyUseHTMLString: false
+      dangerouslyUseHTMLString: true
     })
-    
-    console.log('💡 详细信息已输出到控制台，请按 F12 查看')
   } catch (error) {
-    console.error('❌ 分析存储空间失败:', error)
+    console.error('分析存储空间失败:', error)
     ElMessage.error('分析失败：' + error.message)
   }
 }
@@ -516,13 +542,6 @@ function getProgressColor(confidence) {
   return '#f56c6c'
 }
 
-function getQualityColor(score) {
-  if (score >= 80) return '#67c23a'
-  if (score >= 60) return '#409eff'
-  if (score >= 40) return '#e6a23c'
-  return '#f56c6c'
-}
-
 function formatFullTime(timestamp) {
   const date = new Date(timestamp)
   return date.toLocaleString('zh-CN', {
@@ -537,7 +556,6 @@ function formatFullTime(timestamp) {
 
 // 查看详情
 function viewDetails(row) {
-  // 深拷贝确保不修改原始数据
   selectedPrediction.value = JSON.parse(JSON.stringify(row))
   showDetailDialog.value = true
 }
@@ -548,33 +566,37 @@ function closeDetailDialog() {
   selectedPrediction.value = null
 }
 
-// 删除记录
+// 删除记录（服务端记录走 API，本地记录走 IndexedDB）
 function deleteRecord(row) {
   ElMessageBox.confirm(
-    `确定要删除这条${row.source === 'video' ? '视频帧' : '图片识别'}记录吗？`,
+    row.origin === 'server'
+      ? '确定要删除这条服务端记录吗？此操作不可恢复！'
+      : `确定要删除这条${row.source === 'video' ? '视频的全部本地帧记录' : '本地识别'}记录吗？`,
     '删除确认',
     {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    if (row.source === 'video') {
-      // 删除视频记录：需要找到对应的视频并删除整个视频
-      const videoId = row.video_id
-      const video = videoStore.videoHistory.find(v => v.video_id === videoId)
-      if (video) {
-        videoStore.deleteHistoryItem(video.id)
-        ElMessage.success('已删除该视频的所有帧记录')
-      }
-    } else {
-      // 删除图片识别记录（使用 id 字段）
-      if (row.id) {
-        emotionStore.deletePrediction(row.id)
-        ElMessage.success('删除成功')
+  ).then(async () => {
+    try {
+      if (row.origin === 'server') {
+        await emotionStore.deleteServerHistory(row.serverId)
+        ElMessage.success('已从服务端删除该记录')
+      } else if (row.source === 'video') {
+        const video = videoStore.videoHistory.find(v => v.video_id === row.video_id)
+        if (video) {
+          videoStore.deleteHistoryItem(video.id)
+          ElMessage.success('已删除该视频的本地帧记录')
+        }
       } else {
-        ElMessage.error('无法删除：记录缺少ID')
+        const localId = row.id.replace(/^local-/, '')
+        await emotionStore.deletePrediction(Number(localId) || localId)
+        ElMessage.success('删除成功')
       }
+    } catch (error) {
+      console.error('删除失败:', error)
+      ElMessage.error('删除失败：' + (error.response?.data?.error || error.message))
     }
   }).catch(() => {
     // 用户取消删除
@@ -599,29 +621,39 @@ function batchDelete() {
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
+  ).then(async () => {
     let successCount = 0
     let failCount = 0
-    
-    // 分别处理图片和视频记录
-    const imageRecords = selectedRecords.value.filter(r => r.source === 'image')
-    const videoIds = new Set(selectedRecords.value.filter(r => r.source === 'video').map(r => r.video_id))
-    
-    // 删除图片记录
-    imageRecords.forEach(record => {
+
+    const serverRecords = selectedRecords.value.filter(r => r.origin === 'server')
+    const localImageRecords = selectedRecords.value.filter(r => r.origin === 'local' && r.source === 'image')
+    const videoIds = new Set(selectedRecords.value.filter(r => r.origin === 'local' && r.source === 'video').map(r => r.video_id))
+
+    // 服务端逐条删除
+    for (const record of serverRecords) {
       try {
-        if (record.id) {
-          emotionStore.deletePrediction(record.id)
-          successCount++
-        }
+        await emotionStore.deleteServerHistory(record.serverId)
+        successCount++
       } catch (err) {
-        console.error('删除图片记录失败:', err)
+        console.error('删除服务端记录失败:', err)
         failCount++
       }
-    })
-    
-    // 删除视频记录（按video_id去重）
-    videoIds.forEach(videoId => {
+    }
+
+    // 本地图片记录
+    for (const record of localImageRecords) {
+      try {
+        const localId = record.id.replace(/^local-/, '')
+        await emotionStore.deletePrediction(Number(localId) || localId)
+        successCount++
+      } catch (err) {
+        console.error('删除本地图片记录失败:', err)
+        failCount++
+      }
+    }
+
+    // 本地视频记录（按 video_id 去重）
+    for (const videoId of videoIds) {
       try {
         const video = videoStore.videoHistory.find(v => v.video_id === videoId)
         if (video) {
@@ -629,17 +661,17 @@ function batchDelete() {
           successCount++
         }
       } catch (err) {
-        console.error('删除视频记录失败:', err)
+        console.error('删除本地视频记录失败:', err)
         failCount++
       }
-    })
-    
+    }
+
     if (successCount > 0) {
       ElMessage.success(`成功删除 ${successCount} 条记录${failCount > 0 ? `，失败 ${failCount} 条` : ''}`)
     } else {
       ElMessage.error('删除失败')
     }
-    
+
     selectedRecords.value = []
   }).catch(() => {
     // 用户取消删除
@@ -650,7 +682,7 @@ function batchDelete() {
 <style scoped>
 .history-view {
   width: 100%;
-  max-width: 1600px; /* 增大布局宽度以容纳所有按钮 */
+  max-width: 1600px;
 }
 
 /* 搜索栏样式 */
@@ -659,30 +691,30 @@ function batchDelete() {
 }
 
 .search-form {
-  background-color: #f5f7fa;
+  background-color: var(--el-color-primary-light-9);
   padding: 15px;
-  border-radius: 8px;
+  border-radius: 10px;
   margin-bottom: 10px;
   display: flex;
-  flex-wrap: nowrap; /* 强制单行显示 */
+  flex-wrap: wrap;
+  gap: 4px 0;
   align-items: center;
-  width: fit-content; /* 让表单宽度适应内容 */
-  min-width: 100%; /* 最小宽度100% */
+  width: 100%;
 }
 
 .search-form :deep(.el-form-item) {
-  margin-bottom: 0; /* 移除底部间距 */
-  margin-right: 20px; /* 增大按钮间距 */
-  flex-shrink: 0; /* 防止表单项收缩 */
+  margin-bottom: 4px;
+  margin-right: 16px;
+  flex-shrink: 0;
 }
 
 .search-form :deep(.el-form-item:last-child) {
-  margin-right: 15px; /* 最后一个按钮保持合适的右边距 */
+  margin-right: 0;
 }
 
 .search-result-info {
   text-align: right;
-  color: #606266;
+  color: var(--color-mahogany);
   margin-top: 10px;
   font-size: 14px;
 }
@@ -695,6 +727,13 @@ function batchDelete() {
 
 .card-header h2 {
   margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 /* 识别结果内容样式 */
@@ -717,9 +756,9 @@ function batchDelete() {
 }
 
 .image-title {
-  font-weight: bold;
+  font-weight: 600;
   margin-bottom: 10px;
-  color: #606266;
+  color: var(--color-mahogany);
 }
 
 .image-box img {
@@ -727,13 +766,8 @@ function batchDelete() {
   max-height: 300px;
   object-fit: contain;
   border-radius: 8px;
-  border: 1px solid #dcdfe6;
-}
-
-.image-note {
-  margin-top: 8px;
-  color: #909399;
-  font-size: 12px;
+  border: 1px solid var(--color-sand);
+  background: var(--el-color-primary-light-9);
 }
 
 .no-image {
@@ -742,10 +776,10 @@ function batchDelete() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f7fa;
-  border: 1px dashed #dcdfe6;
+  background-color: var(--el-color-primary-light-9);
+  border: 1px dashed var(--color-sand);
   border-radius: 8px;
-  color: #909399;
+  color: var(--color-mahogany);
 }
 
 /* 主要情绪显示 */
@@ -754,14 +788,14 @@ function batchDelete() {
   align-items: center;
   justify-content: center;
   margin: 30px 0;
-  padding: 20px;
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  padding: 24px;
+  background: var(--color-accent);
   border-radius: 16px;
-  color: white;
+  color: #fafafa;
 }
 
 .emotion-icon {
-  font-size: 8rem;
+  font-size: 7rem;
   margin-right: 30px;
 }
 
@@ -772,7 +806,8 @@ function batchDelete() {
 
 .emotion-info h2 {
   margin: 0 0 10px 0;
-  font-size: 2.5rem;
+  font-size: 2.25rem;
+  letter-spacing: -0.02em;
 }
 
 .emotion-en {
@@ -784,7 +819,7 @@ function batchDelete() {
 .confidence-text {
   margin: 10px 0 0 0;
   font-size: 1.1rem;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 /* 概率分布 */
@@ -795,7 +830,7 @@ function batchDelete() {
 .probability-item {
   margin-bottom: 15px;
   padding: 10px;
-  background-color: #f9f9f9;
+  background-color: var(--el-color-primary-light-9);
   border-radius: 8px;
 }
 
@@ -810,55 +845,6 @@ function batchDelete() {
   margin-right: 10px;
 }
 
-/* 人脸质量评估 */
-.quality-info {
-  margin-bottom: 30px;
-}
-
-.quality-score {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.quality-level {
-  margin-left: 30px;
-  font-size: 1.2rem;
-}
-
-.quality-percentage {
-  font-size: 1.2rem;
-  font-weight: bold;
-}
-
-.quality-details {
-  display: flex;
-  justify-content: space-around;
-  flex-wrap: wrap;
-}
-
-.quality-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 15px;
-  width: 200px;
-}
-
-.quality-item span {
-  margin: 0 10px;
-  min-width: 60px;
-}
-
-.quality-warnings {
-  margin-top: 20px;
-}
-
-/* 性能信息 */
-.performance-info {
-  margin-bottom: 30px;
-}
-
 /* 元信息 */
 .meta-info {
   margin-top: 20px;
@@ -867,54 +853,26 @@ function batchDelete() {
   gap: 10px;
 }
 
-.no-data {
-  text-align: center;
-  padding: 30px;
-  color: #909399;
-  background-color: #f5f7fa;
-  border-radius: 8px;
-  margin-bottom: 30px;
-}
-
 /* 响应式设计 */
 @media (max-width: 768px) {
   .main-emotion {
     flex-direction: column;
     text-align: center;
   }
-  
+
   .emotion-icon {
     margin-right: 0;
     margin-bottom: 20px;
-    font-size: 6rem;
+    font-size: 5rem;
   }
-  
+
   .emotion-info {
     text-align: center;
   }
-  
+
   .image-compare {
     flex-direction: column;
     align-items: center;
-  }
-  
-  .quality-score {
-    flex-direction: column;
-  }
-  
-  .quality-level {
-    margin-left: 0;
-    margin-top: 20px;
-  }
-  
-  .quality-details {
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .quality-item {
-    width: 100%;
-    justify-content: center;
   }
 }
 </style>

@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="frontend/public/logo.png" alt="FER Logo" width="120" />
-
-# 人脸情绪识别系统
+<img src="docs/banner.svg" alt="FaceLens" width="640" />
 
 **基于 RAF-DB 的端到端人脸情绪识别平台 · Facial Emotion Recognition System**
 
@@ -35,22 +33,24 @@
 
 **情绪识别**
 
-- 🖼️ **图片识别** — 单图预测，MTCNN 人脸检测、对齐与质量评估（清晰度 / 亮度 / 对比度），支持切换完整图片或人脸区域
-- 🎬 **视频分析** — 视频抽帧逐段分析，输出情绪随时间变化的趋势
-- 🔀 **多模型切换** — CNN / VGG16 / SE-Net（81、83 两版）四套权重在线切换
+- 🖼️ **图片识别** — 单图预测，MTCNN 人脸检测、对齐与质量评估（清晰度 / 亮度 / 对比度），支持摄像头拍照
+- 🎬 **视频分析** — 视频抽帧逐帧分析，输出情绪时间轴、转换记录与情绪流，支持导出 PDF 分析报告
+- 🔀 **多模型切换** — CNN / VGG16 / SE-Net（81、83 两版）四套权重在线切换，准确率实时从后端读取
 - ⚡ **批量预测** — 多张图片一次性提交推理
 
-**用户与管理**
+**数据与管理**
 
-- 🔐 **JWT 认证** — 注册、登录、令牌刷新、资料管理
-- 🛠️ **管理后台** — 用户管理、识别历史、情绪日记、感恩记录、健康评估的统一管理
-- 📊 **数据分析** — 情绪分布、趋势、周期对比等可视化图表（ECharts）
+- 📊 **数据分析** — 情绪分布、趋势、置信度、24 小时时段、日历热力图等 8 类图表（ECharts）
+- 🕘 **服务端历史** — 识别记录入库存储，历史记录页支持搜索/筛选/单条与批量删除
+- 📄 **报告导出** — 数据分析与视频分析结果一键导出为 PDF 报告
+- 🛠️ **管理后台** — 用户管理、识别历史、日记、感恩记录、健康评估的统一管理，附系统运行信息与后端日志查看
+- 🔐 **JWT 认证** — 注册、登录、令牌自动刷新、资料与头像管理、修改密码
 
 **心理健康辅助**
 
-- 💚 **健康评估** — 基于情绪记录的心理状态参考
+- 💚 **健康评估** — 基于情绪记录的心理状态参考与建议（服务端按日生成）
 - 📔 **情绪日记 / 感恩记录** — 辅助情绪管理与自我调节
-- 🧘 **放松训练** — 呼吸练习、冥想引导、PMR 渐进式肌肉放松
+- 🧘 **放松训练** — 呼吸练习、冥想引导视频、PMR 渐进式肌肉放松、接地练习
 
 > ⚠️ 系统输出仅供参考，不构成任何医学或心理诊断建议。
 
@@ -181,13 +181,19 @@ docker compose down -v     # 同时删除数据卷（清空用户数据）
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `GET` | `/api/health` | 服务健康检查 |
-| `GET` | `/api/models` | 模型加载状态 |
+| `GET` | `/api/models` | 模型加载状态与准确率 |
 | `POST` | `/api/auth/login` | 登录获取 JWT |
+| `PUT` | `/api/auth/profile` | 更新资料（邮箱 / 头像路径） |
+| `POST` | `/api/auth/avatar` | 上传头像（base64） |
+| `GET` | `/api/auth/stats` | 个人使用统计（真实数据） |
 | `POST` | `/api/predict` | 单图情绪识别 |
 | `POST` | `/api/batch_predict` | 批量识别 |
 | `POST` | `/api/video/upload` | 上传视频 |
 | `POST` | `/api/video/analyze` | 视频情绪分析 |
-| `GET` | `/api/histories` | 查询识别历史 |
+| `GET` | `/api/histories` | 查询识别历史（分页） |
+| `GET` | `/api/health/assessment` | 当日心理健康评估 |
+| `GET` | `/api/admin/system-info` | 系统运行信息（管理员） |
+| `GET` | `/api/admin/system-logs` | 后端日志尾部（管理员） |
 
 调用识别等受保护接口时需携带 `Authorization: Bearer <token>`：
 
@@ -220,11 +226,11 @@ curl -X POST http://localhost:5000/api/predict \
 │   ├── tests/
 │   └── data/                # 运行时数据（uploads / logs / db，默认忽略）
 ├── frontend/                # Vue 3 前端
-│   ├── public/              # Favicon、Logo 等静态资源
+│   ├── public/              # Favicon 等静态资源
 │   └── src/                 # pages / api / assets / stores / router
 ├── training/                # RAF-DB 训练 Notebook 与说明
 ├── models/                  # 模型权重（大文件，默认忽略）
-├── docs/                    # 目录约定、品牌资源、截图
+├── docs/                    # Banner、截图等文档资源
 ├── docker-compose.yml       # Docker 一键部署
 └── .env.example             # 环境变量模板
 ```

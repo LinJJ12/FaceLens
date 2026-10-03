@@ -599,20 +599,42 @@ def resend_verification():
 @auth_bp.route('/stats', methods=['GET'])
 @token_required
 def get_user_stats():
-    """获取用户统计信息"""
+    """获取用户统计信息（从数据库实时统计）"""
     try:
         user = request.current_user
-        
-        # 这里应该从数据库获取真实的统计信息
         stats = {
             'total_predictions': 0,
             'active_days': 0,
-            'favorite_emotion': 'happy',
+            'favorite_emotion': '',
             'last_login': datetime.utcnow().isoformat() + 'Z'
         }
-        
+
+        if HAVE_DB:
+            try:
+                from sqlalchemy import func
+                from src.storage.database import PredictionHistory
+
+                username = user.get('username')
+                base = PredictionHistory.query.filter_by(username=username)
+                stats['total_predictions'] = base.count()
+
+                active_days = db.session.query(
+                    func.count(func.distinct(func.date(PredictionHistory.created_at)))
+                ).filter_by(username=username).scalar()
+                stats['active_days'] = int(active_days or 0)
+
+                favorite = db.session.query(
+                    PredictionHistory.emotion, func.count(PredictionHistory.id)
+                ).filter_by(username=username).group_by(
+                    PredictionHistory.emotion
+                ).order_by(func.count(PredictionHistory.id).desc()).first()
+                if favorite:
+                    stats['favorite_emotion'] = favorite[0]
+            except Exception as db_err:
+                current_app.logger.warning(f"统计查询失败: {db_err}")
+
         return jsonify({'stats': stats}), 200
-        
+
     except Exception as e:
         return jsonify({'error': f'Failed to get stats: {str(e)}'}), 500
 

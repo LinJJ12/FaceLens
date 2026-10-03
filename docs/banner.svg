@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200" viewBox="0 0 800 200" role="img" aria-label="FaceLens">
+  <rect width="800" height="200" rx="24" fill="#18181b"/>
+  <!-- lens mark -->
+  <circle cx="110" cy="100" r="38" fill="none" stroke="#fafafa" stroke-width="7"/>
+  <circle cx="110" cy="100" r="11" fill="#fafafa"/>
+  <!-- wordmark -->
+  <text x="180" y="102" font-family="Inter, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="64" font-weight="700" letter-spacing="-2" fill="#fafafa">FaceLens</text>
+  <!-- tagline -->
+  <text x="182" y="148" font-family="Inter, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="22" fill="#a1a1aa">基于 RAF-DB 的人脸情绪识别系统</text>
+</svg>
