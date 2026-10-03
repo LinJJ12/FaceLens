@@ -1,7 +1,7 @@
 # 推理后端 — Python 3.8 + TensorFlow 2.10.1（与本地验证环境一致）
 # 构建上下文为仓库根目录: docker compose build backend
 
-FROM python:3.8-slim-bullseye
+FROM python:3.13-slim-bullseye
 
 WORKDIR /app
 
