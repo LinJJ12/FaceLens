@@ -2,7 +2,7 @@
   <div class="video-analysis-view">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h1>🎬 视频情绪分析</h1>
+      <h1>视频情绪分析</h1>
       <p>上传视频，智能识别视频中的人脸情绪变化</p>
     </div>
 
@@ -20,7 +20,7 @@
     <el-card v-if="currentStep === 0" class="upload-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>📤 上传视频文件</span>
+          <span>上传视频文件</span>
         </div>
       </template>
 
@@ -88,7 +88,7 @@
     <el-card v-if="currentStep === 1" class="config-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>⚙️ 分析参数配置</span>
+          <span>分析参数配置</span>
         </div>
       </template>
 
@@ -121,9 +121,9 @@
       <el-form :model="analysisConfig" label-width="140px" class="config-form">
         <el-form-item label="识别模型" class="form-item-spacing">
           <el-radio-group v-model="analysisConfig.model" class="model-radio-group">
-            <el-radio label="cnn" border>CNN (83.77%) ⭐</el-radio>
+            <el-radio label="cnn" border>CNN (83.77%) · 推荐</el-radio>
             <el-radio label="vgg" border>VGG16 (80%)</el-radio>
-            <el-radio label="se83" border>SE-Net (83%) ⭐</el-radio>
+            <el-radio label="se83" border>SE-Net (83%) · 推荐</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -140,8 +140,8 @@
               class="interval-slider"
             />
             <div class="hint-box">
-              <p class="config-hint">⏱️ 每隔 <strong>{{ analysisConfig.interval }}</strong> 秒提取一帧进行分析</p>
-              <p class="config-hint">📊 预计提取约 <strong>{{ estimatedFrames }}</strong> 帧 (最多 {{ analysisConfig.maxFrames }} 帧)</p>
+              <p class="config-hint">每隔 <strong>{{ analysisConfig.interval }}</strong> 秒提取一帧进行分析</p>
+              <p class="config-hint">预计提取约 <strong>{{ estimatedFrames }}</strong> 帧 (最多 {{ analysisConfig.maxFrames }} 帧)</p>
             </div>
           </div>
         </el-form-item>
@@ -156,7 +156,7 @@
               class="max-frames-input"
             />
             <div class="hint-box">
-              <p class="config-hint">⚠️ 限制提取的最大帧数，避免处理时间过长</p>
+              <p class="config-hint">限制提取的最大帧数，避免处理时间过长</p>
             </div>
           </div>
         </el-form-item>
@@ -170,7 +170,7 @@
               size="large"
             />
             <div class="hint-box">
-              <p class="config-hint">🎯 自动检测并裁剪人脸区域，提高识别准确度</p>
+              <p class="config-hint">自动检测并裁剪人脸区域，提高识别准确度</p>
             </div>
           </div>
         </el-form-item>
@@ -197,7 +197,7 @@
     <el-card v-if="currentStep === 2" class="analyzing-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>🔄 正在分析视频...</span>
+          <span>正在分析视频...</span>
         </div>
       </template>
 
@@ -226,7 +226,7 @@
         <el-col :xs="12" :sm="6" :md="6">
           <el-card class="stat-card" shadow="hover">
             <div class="stat-content">
-              <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+              <div class="stat-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
                 <el-icon><film /></el-icon>
               </div>
               <div class="stat-info">
@@ -286,7 +286,7 @@
       <el-card class="timeline-card" shadow="hover">
         <template #header>
           <div class="card-header">
-            <span>📈 情绪变化时间轴</span>
+            <span>情绪变化时间轴</span>
           </div>
         </template>
 
@@ -322,7 +322,7 @@
       <el-card class="frames-card" shadow="hover">
         <template #header>
           <div class="card-header">
-            <span>🖼️ 帧浏览器 ({{ currentFrameIndex + 1 }} / {{ videoStore.totalFrames }})</span>
+            <span>帧浏览器 ({{ currentFrameIndex + 1 }} / {{ videoStore.totalFrames }})</span>
             <div>
               <el-button-group>
                 <el-button
@@ -421,7 +421,7 @@
       <el-card class="distribution-card" shadow="hover">
         <template #header>
           <div class="card-header">
-            <span>📊 情绪分布统计</span>
+            <span>情绪分布统计</span>
           </div>
         </template>
 
@@ -768,7 +768,7 @@ onMounted(() => {
   text-align: center;
   margin-bottom: 30px;
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
@@ -997,7 +997,7 @@ onMounted(() => {
 
 .emotion-flow {
   padding: 20px;
-  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  background: linear-gradient(135deg, #6366F115 0%, #8B5CF615 100%);
   border-radius: 8px;
   margin-bottom: 20px;
 }

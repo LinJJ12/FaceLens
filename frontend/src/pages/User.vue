@@ -2,7 +2,7 @@
   <div class="user-view">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h1>👤 个人中心</h1>
+      <h1>个人中心</h1>
       <p>管理您的个人信息和偏好设置</p>
     </div>
 
@@ -65,7 +65,7 @@
         <!-- 快速操作 -->
         <el-card class="quick-actions-card" shadow="hover">
           <template #header>
-            <span>⚡ 快速操作</span>
+            <span>快速操作</span>
           </template>
           <div class="quick-actions">
             <el-upload
@@ -103,7 +103,7 @@
         <el-card class="achievements-card" shadow="hover">
           <template #header>
             <div class="card-header-with-actions">
-              <span>🏆 成就徽章</span>
+              <span>成就徽章</span>
               <el-tag type="success">{{ unlockedCount }}/{{ totalAchievements }}</el-tag>
             </div>
           </template>
@@ -125,7 +125,7 @@
                   :show-text="false"
                 />
                 <div v-else class="achievement-unlocked">
-                  ✓ 已解锁 • {{ formatDate(achievement.unlockedAt) }}
+                  已解锁 • {{ formatDate(achievement.unlockedAt) }}
                 </div>
               </div>
             </div>
@@ -135,12 +135,12 @@
         <!-- 使用统计 -->
         <el-card class="stats-card" shadow="hover">
           <template #header>
-            <span>📊 使用统计</span>
+            <span>使用统计</span>
           </template>
           <el-row :gutter="20">
             <el-col :span="8">
               <div class="stat-box">
-                <div class="stat-box-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+                <div class="stat-box-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
                   📅
                 </div>
                 <div class="stat-box-content">
@@ -152,7 +152,7 @@
             <el-col :span="8">
               <div class="stat-box">
                 <div class="stat-box-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
-                  ⚡
+
                 </div>
                 <div class="stat-box-content">
                   <div class="stat-box-value">{{ todayCount }}</div>
@@ -194,7 +194,7 @@
         <el-card class="goals-card" shadow="hover">
           <template #header>
             <div class="card-header-with-actions">
-              <span>🎯 我的目标</span>
+              <span>我的目标</span>
               <el-button size="small" @click="addGoalDialog = true">
                 <el-icon><plus /></el-icon>
                 添加目标
@@ -234,7 +234,7 @@
         <!-- 通知设置 -->
         <el-card class="settings-card" shadow="hover">
           <template #header>
-            <span>🔔 通知设置</span>
+            <span>通知设置</span>
           </template>
           <el-form label-width="150px">
             <el-form-item label="情绪提醒">
@@ -259,7 +259,7 @@
         <!-- 隐私设置 -->
         <el-card class="settings-card" shadow="hover">
           <template #header>
-            <span>🔒 隐私设置</span>
+            <span>隐私设置</span>
           </template>
           <el-form label-width="150px">
             <el-form-item label="数据收集">
@@ -280,7 +280,7 @@
         <!-- 显示设置 -->
         <el-card class="settings-card" shadow="hover">
           <template #header>
-            <span>🎨 显示设置</span>
+            <span>显示设置</span>
           </template>
           <el-form label-width="150px">
             <el-form-item label="主题模式">
@@ -306,7 +306,7 @@
         <!-- 模型偏好 -->
         <el-card class="settings-card" shadow="hover">
           <template #header>
-            <span>🤖 模型偏好</span>
+            <span>模型偏好</span>
           </template>
           <el-form label-width="150px">
             <el-form-item label="默认模型">
@@ -1786,7 +1786,7 @@ onBeforeUnmount(() => {
 .stat-value {
   font-size: 1.8rem;
   font-weight: bold;
-  color: #667eea;
+  color: #6366F1;
   margin-bottom: 0.25rem;
 }
 
@@ -2258,12 +2258,12 @@ onBeforeUnmount(() => {
 }
 
 .dark .el-switch__core.is-checked {
-  background-color: #667eea !important;
+  background-color: #6366F1 !important;
 }
 
 .dark .el-radio-button__orig-radio:checked + .el-radio-button__inner {
-  background-color: #667eea !important;
-  border-color: #667eea !important;
+  background-color: #6366F1 !important;
+  border-color: #6366F1 !important;
 }
 
 .dark .el-select {
@@ -2324,7 +2324,7 @@ onBeforeUnmount(() => {
 .dark .crop-instructions {
   background: #2c3e50 !important;
   color: #e0e0e0 !important;
-  border-left-color: #667eea !important;
+  border-left-color: #6366F1 !important;
 }
 
 /* 无动画模式 */

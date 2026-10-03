@@ -2,26 +2,10 @@
   <div class="login-container">
     <!-- 背景装饰 -->
     <div class="bg-decoration">
-      <!-- 温馨背景图案 -->
       <div class="bg-pattern"></div>
-      
-      <!-- 温馨漂浮元素 -->
-      <div class="floating-elements">
-        <!-- 左侧元素 -->
-        <div class="element cherry el-1">🌸</div>
-        <div class="element cloud el-2">☁️</div>
-        <div class="element butterfly el-3">🦋</div>
-        <div class="element cherry el-4">🌸</div>
-        <div class="element cloud el-5">☁️</div>
-        
-        <!-- 右侧元素 -->
-        <div class="element cloud el-6">☁️</div>
-        <div class="element butterfly el-7">🦋</div>
-        <div class="element cherry el-8">🌸</div>
-        <div class="element cloud el-9">☁️</div>
-        <div class="element cherry el-10">🌸</div>
-      </div>
-      
+      <div class="bg-orb orb-1"></div>
+      <div class="bg-orb orb-2"></div>
+      <div class="bg-orb orb-3"></div>
       <div class="floating-shapes">
         <div class="shape shape-1"></div>
         <div class="shape shape-2"></div>
@@ -91,19 +75,6 @@
             </el-button>
           </el-form-item>
         </el-form>
-
-        <!-- 第三方登录 -->
-        <el-divider>或</el-divider>
-        <div class="social-login">
-          <el-button size="large" class="social-btn wechat">
-            <el-icon><ChatDotRound /></el-icon>
-            微信登录
-          </el-button>
-          <el-button size="large" class="social-btn qq">
-            <el-icon><Message /></el-icon>
-            QQ登录
-          </el-button>
-        </div>
 
         <!-- 注册链接 -->
         <div class="register-link">
@@ -290,7 +261,6 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatDotRound, Message } from '@element-plus/icons-vue'
 import api from '../api/client'
 import { useUserStore } from '../stores/user'
 
@@ -531,7 +501,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #F5F2E9 0%, #FFF8F0 50%, #F5F2E9 100%);
+  background: linear-gradient(135deg, #F6F7FB 0%, #EEF2FF 50%, #F6F7FB 100%);
   position: relative;
   overflow: hidden;
   padding: 2rem;
@@ -548,288 +518,61 @@ onMounted(() => {
   z-index: 0;
 }
 
-/* 背景图案 */
+/* 背景图案：细网格 + 品牌色渐变晕染 */
 .bg-pattern {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: 
-    radial-gradient(circle at 20% 30%, rgba(232, 220, 202, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(183, 28, 28, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 40% 80%, rgba(26, 36, 86, 0.08) 0%, transparent 50%);
-  background-size: 100% 100%;
-  animation: patternShift 20s ease-in-out infinite;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(79, 70, 229, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 70, 229, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 18% 22%, rgba(99, 102, 241, 0.10) 0%, transparent 45%),
+    radial-gradient(circle at 82% 76%, rgba(139, 92, 246, 0.10) 0%, transparent 45%);
+  background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
 }
 
-@keyframes patternShift {
-  0%, 100% {
-    opacity: 0.6;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.05);
-  }
-}
-
-/* 漂浮的书页和墨水元素 */
-.floating-elements {
+/* 品牌色光斑 */
+.bg-orb {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.5;
+  will-change: transform;
 }
 
-.element {
-  position: absolute;
-  opacity: 0.2;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.1));
-  will-change: transform, opacity;
+.orb-1 {
+  width: 420px;
+  height: 420px;
+  background: #C7D2FE;
+  top: -140px;
+  left: -110px;
+  animation: orbDrift 16s ease-in-out infinite;
 }
 
-/* 羽毛 - 轻盈飘动 */
-.feather {
-  font-size: 1.8rem;
-  animation: floatGentle 12s ease-in-out infinite;
+.orb-2 {
+  width: 360px;
+  height: 360px;
+  background: #DDD6FE;
+  bottom: -140px;
+  right: -100px;
+  animation: orbDrift 19s ease-in-out infinite reverse;
 }
 
-/* 樱花 - 旋转飘落 */
-.cherry {
-  font-size: 2rem;
-  animation: cherryFall 14s ease-in-out infinite;
+.orb-3 {
+  width: 240px;
+  height: 240px;
+  background: #E0E7FF;
+  top: 42%;
+  right: 14%;
+  opacity: 0.4;
+  animation: orbDrift 22s ease-in-out infinite;
 }
 
-/* 蒲公英 - 随风飘散 */
-.dandelion {
-  font-size: 1.6rem;
-  animation: dandelionFloat 16s ease-in-out infinite;
-}
-
-/* 叶子 - 摇摆飘落 */
-.leaf {
-  font-size: 1.7rem;
-  animation: leafSway 13s ease-in-out infinite;
-}
-
-/* 花朵 - 轻轻摇曳 */
-.flower {
-  font-size: 1.9rem;
-  animation: flowerSway 11s ease-in-out infinite;
-}
-
-/* 蝴蝶 - 飞舞 */
-.butterfly {
-  font-size: 1.8rem;
-  animation: butterflyFly 10s ease-in-out infinite;
-}
-
-/* 花瓣 */
-.petal {
-  font-size: 1.5rem;
-  animation: petalFloat 15s ease-in-out infinite;
-}
-
-/* 闪光 */
-.sparkle {
-  font-size: 1.2rem;
-  animation: sparkleShine 8s ease-in-out infinite;
-}
-
-/* 心形花 */
-.heart {
-  font-size: 1.6rem;
-  animation: heartPulse 12s ease-in-out infinite;
-}
-
-/* 白云 - 缓慢飘动 */
-.cloud {
-  font-size: 2rem;
-  animation: cloudDrift 18s ease-in-out infinite;
-}
-
-/* 随机位置和延迟 - 左右两侧对称分布，基于斐波那契数列和黄金分割 */
-/* 左侧元素（5个） */
-.el-1 { top: 15%; left: 10%; animation-delay: 0s; }
-.el-2 { top: 35%; left: 18%; animation-delay: 2s; }
-.el-3 { top: 50%; left: 12%; animation-delay: 4s; }
-.el-4 { top: 70%; left: 20%; animation-delay: 1s; }
-.el-5 { top: 88%; left: 15%; animation-delay: 3s; }
-
-/* 右侧元素（5个） */
-.el-6 { top: 15%; right: 10%; animation-delay: 1s; }
-.el-7 { top: 35%; right: 18%; animation-delay: 3s; }
-.el-8 { top: 50%; right: 12%; animation-delay: 5s; }
-.el-9 { top: 70%; right: 20%; animation-delay: 2s; }
-.el-10 { top: 88%; right: 15%; animation-delay: 4s; }
-
-/* 轻柔漂浮 */
-@keyframes floatGentle {
-  0%, 100% {
-    transform: translate(0, 0) rotate(0deg);
-    opacity: 0.2;
-  }
-  25% {
-    transform: translate(8px, -12px) rotate(5deg);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translate(-6px, -8px) rotate(-3deg);
-    opacity: 0.25;
-  }
-  75% {
-    transform: translate(10px, -15px) rotate(8deg);
-    opacity: 0.28;
-  }
-}
-
-/* 樱花飘落 */
-@keyframes cherryFall {
-  0%, 100% {
-    transform: translate(0, 0) rotate(0deg);
-    opacity: 0.25;
-  }
-  25% {
-    transform: translate(-12px, 8px) rotate(90deg);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translate(8px, 15px) rotate(180deg);
-    opacity: 0.28;
-  }
-  75% {
-    transform: translate(-8px, 22px) rotate(270deg);
-    opacity: 0.22;
-  }
-}
-
-/* 蒲公英飘散 */
-@keyframes dandelionFloat {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-    opacity: 0.2;
-  }
-  33% {
-    transform: translate(15px, -18px) scale(0.95);
-    opacity: 0.28;
-  }
-  66% {
-    transform: translate(-12px, -10px) scale(1.05);
-    opacity: 0.24;
-  }
-}
-
-/* 叶子摇摆 */
-@keyframes leafSway {
-  0%, 100% {
-    transform: translate(0, 0) rotate(0deg);
-    opacity: 0.22;
-  }
-  25% {
-    transform: translate(10px, 8px) rotate(12deg);
-    opacity: 0.28;
-  }
-  50% {
-    transform: translate(-8px, 15px) rotate(-8deg);
-    opacity: 0.25;
-  }
-  75% {
-    transform: translate(6px, 20px) rotate(6deg);
-    opacity: 0.24;
-  }
-}
-
-/* 花朵摇曳 */
-@keyframes flowerSway {
-  0%, 100% {
-    transform: translate(0, 0) rotate(-3deg);
-    opacity: 0.25;
-  }
-  50% {
-    transform: translate(5px, -20px) rotate(3deg);
-    opacity: 0.3;
-  }
-}
-
-/* 蝴蝶飞舞 */
-@keyframes butterflyFly {
+@keyframes orbDrift {
   0%, 100% {
     transform: translate(0, 0);
-    opacity: 0.3;
-  }
-  20% {
-    transform: translate(15px, -10px);
-    opacity: 0.35;
-  }
-  40% {
-    transform: translate(20px, -5px);
-    opacity: 0.28;
-  }
-  60% {
-    transform: translate(18px, -12px);
-    opacity: 0.32;
-  }
-  80% {
-    transform: translate(8px, -8px);
-    opacity: 0.3;
-  }
-}
-
-/* 花瓣飘浮 */
-@keyframes petalFloat {
-  0%, 100% {
-    transform: translate(0, 0) rotate(0deg);
-    opacity: 0.18;
   }
   50% {
-    transform: translate(-10px, -12px) rotate(180deg);
-    opacity: 0.25;
-  }
-}
-
-/* 闪光闪烁 */
-@keyframes sparkleShine {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.1;
-  }
-  50% {
-    transform: scale(1.3);
-    opacity: 0.4;
-  }
-}
-
-/* 心跳脉动 */
-@keyframes heartPulse {
-  0%, 100% {
-    transform: scale(1) rotate(0deg);
-    opacity: 0.2;
-  }
-  50% {
-    transform: scale(1.1) rotate(5deg);
-    opacity: 0.3;
-  }
-}
-
-/* 白云飘动 */
-@keyframes cloudDrift {
-  0%, 100% {
-    transform: translate(0, 0);
-    opacity: 0.25;
-  }
-  25% {
-    transform: translate(-15px, -8px);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translate(-22px, -5px);
-    opacity: 0.28;
-  }
-  75% {
-    transform: translate(-10px, -12px);
-    opacity: 0.26;
+    transform: translate(24px, -18px);
   }
 }
 
@@ -899,7 +642,7 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   transition: all 0.3s ease;
-  border: 1px solid #E8DCCA;
+  border: 1px solid #E2E8F0;
 }
 
 .login-card:hover {
@@ -935,7 +678,7 @@ onMounted(() => {
   font-weight: bold;
   color: #1A2456;
   margin: 0;
-  font-family: 'Playfair Display', serif;
+  letter-spacing: 0.01em;
 }
 
 .subtitle {
@@ -1003,7 +746,7 @@ onMounted(() => {
   border-radius: 12px;
   font-size: 1.1rem;
   font-weight: 600;
-  background: #1A2456;
+  background: var(--el-color-primary, #4F46E5);
   border: none;
   transition: all 0.3s ease;
 }
@@ -1013,38 +756,6 @@ onMounted(() => {
 .forgot-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
-}
-
-/* 第三方登录 */
-.social-login {
-  display: flex;
-  gap: 1rem;
-  margin: 1.5rem 0;
-}
-
-.social-btn {
-  flex: 1;
-  height: 45px;
-  border-radius: 10px;
-  border: 1px solid #e4e7ed;
-  background: white;
-  color: #606266;
-  transition: all 0.3s ease;
-}
-
-.social-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.social-btn.wechat:hover {
-  border-color: #07c160;
-  color: #07c160;
-}
-
-.social-btn.qq:hover {
-  border-color: #1296db;
-  color: #1296db;
 }
 
 /* 链接样式 */
@@ -1086,7 +797,7 @@ onMounted(() => {
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(26, 36, 86, 0.55);
   z-index: 1;
 }
 
@@ -1137,11 +848,7 @@ onMounted(() => {
   .logo h1 {
     font-size: 1.5rem;
   }
-  
-  .social-login {
-    flex-direction: column;
-  }
-  
+
   .footer-links {
     flex-direction: column;
     gap: 0.5rem;
@@ -1176,16 +883,23 @@ onMounted(() => {
   color: #909399;
 }
 
-.dark .social-btn {
-  background: #333;
-  border-color: #404040;
-  color: #e0e0e0;
-}
-
 .dark .register-link,
 .dark .login-link,
 .dark .back-to-login {
   color: #b0b0b0;
+}
+
+.dark .login-footer {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.dark .bg-pattern {
+  background-image:
+    linear-gradient(rgba(129, 140, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(129, 140, 248, 0.05) 1px, transparent 1px),
+    radial-gradient(circle at 18% 22%, rgba(99, 102, 241, 0.16) 0%, transparent 45%),
+    radial-gradient(circle at 82% 76%, rgba(139, 92, 246, 0.16) 0%, transparent 45%);
+  background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
 }
 
 .dark .terms-content h3,

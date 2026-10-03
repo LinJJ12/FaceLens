@@ -89,7 +89,7 @@
     <!-- 侧边栏 -->
     <aside :class="['sidebar', { 'sidebar-collapsed': !sidebarExpanded }]">
       <div class="sidebar-header">
-        <span v-if="sidebarExpanded">🎯 智能分析</span>
+        <span v-if="sidebarExpanded">智能分析</span>
       </div>
       <nav class="sidebar-nav">
         <router-link to="/image-analysis" class="sidebar-item" exact-active-class="router-link-active" title="图片识别">
@@ -124,19 +124,19 @@
       <div class="footer-content">
         <div class="footer-section">
           <h4>关于系统</h4>
-          <p>基于深度学习的人脸情绪识别系统</p>
-          <p>支持7种情绪分类识别</p>
+          <p>基于 RAF-DB 数据集与深度学习的人脸情绪识别系统</p>
+          <p>支持 7 种基本情绪的分类识别</p>
         </div>
         <div class="footer-section">
           <h4>快速链接</h4>
-          <router-link to="/about">关于我们</router-link>
-          <router-link to="/help">帮助中心</router-link>
+          <router-link to="/about">关于系统</router-link>
+          <router-link to="/user">个人中心</router-link>
           <a href="#" @click.prevent="showPrivacy">隐私政策</a>
         </div>
         <div class="footer-section">
-          <h4>联系我们</h4>
-          <p>📧 support@emotion-ai.com</p>
-          <p>📱 +86 138-0000-0000</p>
+          <h4>开源仓库</h4>
+          <a href="https://github.com/LinJJ12/RAF-DB-Based-Facial-Emotion-Recognition-System" target="_blank" rel="noopener">GitHub 项目主页</a>
+          <a href="https://github.com/LinJJ12/RAF-DB-Based-Facial-Emotion-Recognition-System/issues" target="_blank" rel="noopener">提交 Issue</a>
         </div>
         <div class="footer-section">
           <h4>技术栈</h4>
@@ -146,7 +146,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p>&copy; 2025 情绪识别系统. All rights reserved.</p>
+        <p>人脸情绪识别系统 · 仅供学习与研究使用，不构成医学或心理诊断建议</p>
       </div>
     </footer>
   </div>
@@ -314,19 +314,19 @@ onUnmounted(() => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #F5F2E9;
+  background: #F6F7FB;
   background-attachment: fixed;
 }
 
 /* 顶部导航 */
 .header {
-  background: rgba(245, 242, 233, 0.95);
+  background: rgba(246, 247, 251, 0.95);
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 12px rgba(26, 36, 86, 0.1);
   position: sticky;
   top: 0;
   z-index: 1000;
-  border-bottom: 1px solid #E8DCCA;
+  border-bottom: 1px solid #E2E8F0;
 }
 
 .header-content {
@@ -346,7 +346,7 @@ onUnmounted(() => {
   font-size: 1.5rem;
   font-weight: bold;
   color: #1A2456;
-  font-family: 'Playfair Display', serif;
+  font-family: inherit;
 }
 
 .sidebar-toggle {
@@ -386,30 +386,30 @@ onUnmounted(() => {
 
 .nav-item:hover {
   background: rgba(26, 36, 86, 0.1);
-  color: #B71C1C;
+  color: #4F46E5;
 }
 
 .nav-item.router-link-active {
-  background: #1A2456;
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   color: white;
-  box-shadow: 0 10px 25px -5px rgba(26, 36, 86, 0.3), 0 8px 10px -6px rgba(26, 36, 86, 0.2);
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.35), 0 8px 10px -6px rgba(79, 70, 229, 0.2);
 }
 
 .admin-nav {
-  background: #B71C1C;
+  background: #4F46E5;
   color: white;
-  border: 1px solid #B71C1C;
+  border: 1px solid #4F46E5;
 }
 
 .admin-nav:hover {
-  background: rgba(183, 28, 28, 0.9);
+  background: rgba(79, 70, 229, 0.9);
   color: white;
 }
 
 .admin-nav.router-link-active {
-  background: #8B0000;
+  background: #4338CA;
   color: white;
-  box-shadow: 0 10px 25px -5px rgba(183, 28, 28, 0.3);
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.3);
 }
 
 .header-actions {
@@ -456,14 +456,14 @@ onUnmounted(() => {
   top: 70px;
   bottom: 0;
   width: 240px;
-  background: rgba(245, 242, 233, 0.98);
+  background: rgba(246, 247, 251, 0.98);
   backdrop-filter: blur(10px);
   box-shadow: 2px 0 12px rgba(26, 36, 86, 0.08);
   transition: all 0.3s ease;
   z-index: 999;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #E8DCCA;
+  border-right: 1px solid #E2E8F0;
 }
 
 .sidebar.sidebar-collapsed {
@@ -475,9 +475,9 @@ onUnmounted(() => {
   font-size: 1.1rem;
   font-weight: 600;
   color: #1A2456;
-  border-bottom: 1px solid #E8DCCA;
+  border-bottom: 1px solid #E2E8F0;
   text-align: center;
-  font-family: 'Playfair Display', serif;
+  font-family: inherit;
 }
 
 .sidebar-nav {
@@ -512,14 +512,14 @@ onUnmounted(() => {
 
 .sidebar-item:hover {
   background: rgba(26, 36, 86, 0.1);
-  color: #B71C1C;
+  color: #4F46E5;
   transform: translateY(-2px);
 }
 
 .sidebar-item.router-link-active {
-  background: #1A2456;
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   color: white;
-  box-shadow: 0 10px 25px -5px rgba(26, 36, 86, 0.2);
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.28);
 }
 
 .sidebar-item .el-icon {
@@ -547,13 +547,13 @@ onUnmounted(() => {
 
 /* 底部 */
 .footer {
-  background: rgba(245, 242, 233, 0.98);
+  background: rgba(246, 247, 251, 0.98);
   margin-left: 240px;
   transition: margin-left 0.3s ease;
   backdrop-filter: blur(10px);
   margin-top: 4rem;
   padding: 3rem 0 1rem;
-  border-top: 1px solid #E8DCCA;
+  border-top: 1px solid #E2E8F0;
 }
 
 .footer.sidebar-collapsed {
@@ -574,7 +574,7 @@ onUnmounted(() => {
   color: #1A2456;
   margin-bottom: 1rem;
   font-size: 1.1rem;
-  font-family: 'Playfair Display', serif;
+  font-family: inherit;
 }
 
 .footer-section p,
@@ -587,13 +587,13 @@ onUnmounted(() => {
 }
 
 .footer-section a:hover {
-  color: #B71C1C;
+  color: #4F46E5;
 }
 
 .footer-bottom {
   text-align: center;
   padding-top: 2rem;
-  border-top: 1px solid #E8DCCA;
+  border-top: 1px solid #E2E8F0;
   color: rgba(26, 36, 86, 0.6);
 }
 

@@ -25,7 +25,7 @@
 
       <el-divider />
 
-      <h3>🎯 模型性能</h3>
+      <h3>模型性能</h3>
       <el-table :data="modelPerformance" style="width: 100%; margin-top: 1rem;">
         <el-table-column prop="model" label="模型" width="120" />
         <el-table-column prop="accuracy" label="准确率" width="150">
@@ -38,7 +38,7 @@
 
       <el-divider />
 
-      <h3>📚 技术栈</h3>
+      <h3>技术栈</h3>
       <div class="tech-stack">
         <el-tag size="large">Python 3.8</el-tag>
         <el-tag size="large" type="success">TensorFlow/Keras</el-tag>
@@ -49,7 +49,7 @@
 
       <el-divider />
 
-      <h3>🔍 使用说明</h3>
+      <h3>使用说明</h3>
       <ol class="instructions">
         <li>选择要使用的识别模型(CNN/VGG16/SE-Net)</li>
         <li>可选择是否启用人脸检测功能</li>

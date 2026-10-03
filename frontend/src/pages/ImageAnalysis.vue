@@ -6,7 +6,7 @@
         <el-card class="upload-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📸 上传图片</span>
+              <span>上传图片</span>
             </div>
           </template>
           
@@ -14,10 +14,10 @@
           <div class="model-selector">
             <el-text>选择模型:</el-text>
             <el-radio-group v-model="emotionStore.currentModel" class="model-group">
-              <el-radio label="cnn">CNN (83.77%) ⭐</el-radio>
+              <el-radio label="cnn">CNN (83.77%) · 推荐</el-radio>
               <el-radio label="vgg">VGG16 (80%)</el-radio>
               <el-radio label="se81">SE-Net (81%)</el-radio>
-              <el-radio label="se83">SE-Net (83%) ⭐</el-radio>
+              <el-radio label="se83">SE-Net (83%) · 推荐</el-radio>
             </el-radio-group>
           </div>
 
@@ -83,7 +83,7 @@
         <el-card v-if="emotionStore.predictions.length > 0" class="history-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📜 识别历史</span>
+              <span>识别历史</span>
               <el-button text @click="$router.push('/history')">查看全部</el-button>
             </div>
           </template>
@@ -109,7 +109,7 @@
         <el-card class="result-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📊 识别结果</span>
+              <span>识别结果</span>
             </div>
           </template>
 
@@ -550,7 +550,7 @@ watch(() => showCameraDialog.value, (newVal) => {
   gap: 2rem;
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+  background: linear-gradient(135deg, #6366F120 0%, #8B5CF620 100%);
   border-radius: 12px;
 }
 

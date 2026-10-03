@@ -2,7 +2,7 @@
   <div class="health-view">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h1>💚 心理健康中心</h1>
+      <h1>心理健康中心</h1>
       <p>基于您的情绪状态，提供个性化的心理健康建议和放松技巧</p>
     </div>
 
@@ -21,7 +21,7 @@
       </el-empty>
       <el-divider />
       <div style="margin-top: 2rem;">
-        <h3 style="text-align: center; margin-bottom: 1rem;">💡 浏览所有情绪建议</h3>
+        <h3 style="text-align: center; margin-bottom: 1rem;">浏览所有情绪建议</h3>
         <el-row :gutter="16">
           <el-col :xs="12" :sm="8" :md="6" v-for="emotion in allEmotions" :key="emotion.key">
             <el-button 
@@ -39,7 +39,7 @@
     <el-card class="emotion-status-card" shadow="hover" v-else>
       <template #header>
         <div class="card-header">
-          <span>😊 当前情绪状态</span>
+          <span>当前情绪状态</span>
           <el-tag :type="getEmotionTagType(latestEmotion.emotion)">
             {{ latestEmotion.emotion_cn }}
           </el-tag>
@@ -70,7 +70,7 @@
           <template #header>
             <div class="card-header">
               <el-icon color="#67c23a"><info-filled /></el-icon>
-              <span>💡 即时建议</span>
+              <span>即时建议</span>
             </div>
           </template>
           <div class="advice-content">
@@ -92,7 +92,7 @@
           <template #header>
             <div class="card-header">
               <el-icon color="#409eff"><medal /></el-icon>
-              <span>🧘 放松技巧</span>
+              <span>放松技巧</span>
             </div>
           </template>
           <div class="advice-content">
@@ -125,7 +125,7 @@
           <template #header>
             <div class="card-header">
               <el-icon color="#e6a23c"><reading /></el-icon>
-              <span>📚 推荐资源</span>
+              <span>推荐资源</span>
             </div>
           </template>
           <div class="advice-content">
@@ -155,7 +155,7 @@
       <template #header>
         <div class="card-header">
           <el-icon color="#f093fb"><trend-charts /></el-icon>
-          <span>📈 情绪历史趋势</span>
+          <span>情绪历史趋势</span>
         </div>
       </template>
       <div class="trend-content">
@@ -184,7 +184,7 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <div class="trend-stat">
-              <div class="trend-icon" style="background: linear-gradient(135deg, #409eff 0%, #667eea 100%)">
+              <div class="trend-icon" style="background: linear-gradient(135deg, #409eff 0%, #6366F1 100%)">
                 📊
               </div>
               <div class="trend-info">
@@ -229,7 +229,7 @@
       <template #header>
         <div class="card-header">
           <el-icon color="#409eff"><document /></el-icon>
-          <span>📖 {{ currentEmotionKnowledge.title }}</span>
+          <span>{{ currentEmotionKnowledge.title }}</span>
         </div>
       </template>
       <div class="education-content">
@@ -252,7 +252,7 @@
         </el-collapse>
 
         <div class="knowledge-tips" v-if="currentEmotionKnowledge.tips">
-          <h5>💡 重要提示</h5>
+          <h5>重要提示</h5>
           <ul>
             <li v-for="(tip, index) in currentEmotionKnowledge.tips" :key="index">
               {{ tip }}
@@ -262,7 +262,7 @@
 
         <!-- 推荐书籍 -->
         <div class="recommended-books" v-if="recommendedBooks.length > 0">
-          <h5>📚 延伸阅读</h5>
+          <h5>延伸阅读</h5>
           <div class="book-list">
             <div class="book-item" v-for="(book, index) in recommendedBooks" :key="index">
               <div class="book-info">
@@ -281,7 +281,7 @@
     <el-card class="more-advice-card" shadow="hover" v-if="latestEmotion">
       <template #header>
         <div class="card-header">
-          <span>📚 更多{{ latestEmotion.emotion_cn }}建议 ({{ allAdviceList.length }}条)</span>
+          <span>更多{{ latestEmotion.emotion_cn }}建议 ({{ allAdviceList.length }}条)</span>
           <el-button type="primary" size="small" @click="refreshAdviceList">
             <el-icon><refresh /></el-icon> 换一批
           </el-button>
@@ -322,7 +322,7 @@
     <el-card class="toolbox-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>🧰 情绪管理工具箱</span>
+          <span>情绪管理工具箱</span>
         </div>
       </template>
       <el-tabs v-model="activeTab" class="toolbox-tabs">
@@ -337,7 +337,7 @@
             <div class="breathing-info" v-if="currentBreathingInfo">
               <p><strong>{{ currentBreathingInfo.name }}</strong></p>
               <p>{{ currentBreathingInfo.description }}</p>
-              <p class="benefit-text">✨ {{ currentBreathingInfo.benefit }}</p>
+              <p class="benefit-text">{{ currentBreathingInfo.benefit }}</p>
             </div>
             <div class="breathing-circle" :class="{ breathing: isBreathing }">
               <span class="breathing-text">{{ breathingText }}</span>
@@ -368,7 +368,7 @@
             <div v-if="selectedMeditation" class="meditation-content">
               <h4>{{ getCurrentMeditation().title }}</h4>
               <p class="meditation-description">{{ getCurrentMeditation().description }}</p>
-              <p class="meditation-duration">⏱️ {{ getCurrentMeditation().duration }}</p>
+              <p class="meditation-duration">{{ getCurrentMeditation().duration }}</p>
               <el-divider />
               <div class="meditation-video-container">
                 <video 
@@ -382,7 +382,7 @@
                 </video>
               </div>
               <div class="meditation-tips">
-                <h5>💡 冥想小贴士：</h5>
+                <h5>冥想小贴士</h5>
                 <ul>
                   <li>找一个安静、舒适的环境</li>
                   <li>调整坐姿或躺姿，保持身体放松</li>
@@ -419,7 +419,7 @@
               </el-button-group>
               <el-button @click="resetPmr" style="margin-left: 1rem;">重新开始</el-button>
             </div>
-            <p class="pmr-tip">💡 每个动作紧张5秒,放松10秒,感受差异</p>
+            <p class="pmr-tip">每个动作紧张 5 秒、放松 10 秒，感受两者的差异</p>
           </div>
         </el-tab-pane>
 
@@ -445,7 +445,7 @@
             <el-button type="primary" @click="completeGrounding">
               完成练习
             </el-button>
-            <p class="grounding-benefit">✨ 适用于焦虑发作、惊恐、解离等情况</p>
+            <p class="grounding-benefit">适用于焦虑发作、惊恐、解离等情况</p>
           </div>
         </el-tab-pane>
 
@@ -502,7 +502,7 @@
           <template #header>
             <div class="card-header">
               <el-icon color="#f56c6c"><warning-filled /></el-icon>
-              <span>🆘 紧急求助热线</span>
+              <span>紧急求助热线</span>
             </div>
           </template>
           <div class="emergency-content">
@@ -513,7 +513,7 @@
                 v-for="(contact, index) in mentalHealthResources.emergencyContacts" 
                 :key="index"
               >
-                <h5>📞 {{ contact.name }}</h5>
+                <h5>{{ contact.name }}</h5>
                 <p class="contact-phone"><strong>{{ contact.phone }}</strong></p>
                 <p class="contact-desc">{{ contact.description }}</p>
                 <el-tag size="small" type="info">{{ contact.coverage }}</el-tag>
@@ -528,7 +528,7 @@
           <template #header>
             <div class="card-header">
               <el-icon color="#409eff"><reading /></el-icon>
-              <span>🌐 在线资源</span>
+              <span>在线资源</span>
             </div>
           </template>
           <div class="resources-content">
@@ -556,7 +556,7 @@
       <template #header>
         <div class="card-header">
           <el-icon color="#67c23a"><video-camera /></el-icon>
-          <span>🎓 推荐课程</span>
+          <span>推荐课程</span>
         </div>
       </template>
       <div class="courses-content">
@@ -2247,7 +2247,7 @@ onMounted(() => {
   height: 200px;
   margin: 0 auto 2rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2360,7 +2360,7 @@ onMounted(() => {
 .step-number {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -2561,9 +2561,9 @@ onMounted(() => {
 .education-intro {
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  background: linear-gradient(135deg, #6366F115 0%, #8B5CF615 100%);
   border-radius: 12px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid #6366F1;
 }
 
 .education-intro h4 {

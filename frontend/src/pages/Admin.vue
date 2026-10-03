@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-left">
-          <h1>🛠️ 管理员面板</h1>
+          <h1>管理员面板</h1>
           <p>系统管理和用户管理功能</p>
         </div>
         <div class="header-right">
@@ -89,7 +89,7 @@
     <el-card class="users-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>👥 用户管理</span>
+          <span>用户管理</span>
           <div style="display:flex;gap:8px">
             <el-button type="danger" @click="batchDeleteUsers" :disabled="selectedUsers.length === 0">
               批量删除 ({{ selectedUsers.length }})
@@ -188,7 +188,7 @@
     <el-card class="histories-card users-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>📜 预测历史记录</span>
+          <span>预测历史记录</span>
           <div style="display:flex;gap:8px">
             <el-button type="danger" @click="batchDeleteHistories" :disabled="selectedHistories.length === 0">
               批量删除 ({{ selectedHistories.length }})
@@ -287,7 +287,7 @@
     <el-card class="journals-card users-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>📔 情绪日记记录</span>
+          <span>情绪日记记录</span>
           <div style="display:flex;gap:8px">
             <el-button type="danger" @click="batchDeleteJournals" :disabled="selectedJournals.length === 0">
               批量删除 ({{ selectedJournals.length }})
@@ -363,7 +363,7 @@
     <el-card class="gratitudes-card users-card" shadow="hover" style="margin-top:20px">
       <template #header>
         <div class="card-header">
-          <span>🙏 感恩记录</span>
+          <span>感恩记录</span>
           <div style="display:flex;gap:8px">
             <el-button type="danger" @click="batchDeleteGratitudes" :disabled="selectedGratitudes.length === 0">
               批量删除 ({{ selectedGratitudes.length }})
@@ -435,7 +435,7 @@
     <el-card class="emotion-summary-card users-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>📊 用户情绪汇总</span>
+          <span>用户情绪汇总</span>
           <div style="display:flex;gap:8px">
             <el-button type="danger" @click="batchDeleteEmotionSummaries" :disabled="selectedEmotionSummaries.length === 0">
               批量删除 ({{ selectedEmotionSummaries.length }})
@@ -521,7 +521,7 @@
     <el-card class="health-assessment-card users-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>🏥 健康评估记录</span>
+          <span>健康评估记录</span>
           <div style="display:flex;gap:8px">
             <el-button type="danger" @click="batchDeleteHealthAssessments" :disabled="selectedHealthAssessments.length === 0">
               批量删除 ({{ selectedHealthAssessments.length }})
@@ -604,7 +604,7 @@
     <el-card class="video-analysis-card users-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>🎬 视频分析结果</span>
+          <span>视频分析结果</span>
           <div style="display:flex;gap:8px">
             <el-button type="danger" @click="batchDeleteVideoAnalyses" :disabled="selectedVideoAnalyses.length === 0">
               批量删除 ({{ selectedVideoAnalyses.length }})
@@ -851,7 +851,7 @@
         <el-card class="settings-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📊 系统信息</span>
+              <span>系统信息</span>
             </div>
           </template>
           <el-descriptions :column="1" border size="large">
@@ -899,7 +899,7 @@
         <el-card class="settings-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>⚙️ 快速操作</span>
+              <span>快速操作</span>
             </div>
           </template>
           <div class="quick-actions">
@@ -2155,7 +2155,7 @@ onMounted(async () => {
 .page-header {
   margin-bottom: 2rem;
   padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
 }
@@ -2255,7 +2255,7 @@ onMounted(async () => {
   font-weight: bold;
   color: #303133;
   margin-bottom: 0.25rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

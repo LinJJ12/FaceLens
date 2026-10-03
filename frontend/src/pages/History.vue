@@ -3,7 +3,7 @@
     <el-card class="history-card">
       <template #header>
         <div class="card-header">
-          <h2>📜 识别历史记录</h2>
+          <h2>识别历史记录</h2>
         </div>
       </template>
 
@@ -35,10 +35,10 @@
             <el-button @click="resetSearch">重置</el-button>
           </el-form-item>
           <el-form-item>
-            <el-button type="info" @click="analyzeStorage">📊 分析存储空间</el-button>
+            <el-button type="info" @click="analyzeStorage">分析存储空间</el-button>
           </el-form-item>
           <el-form-item>
-            <el-button type="warning" @click="cleanupStorage">🧹 清理存储空间</el-button>
+            <el-button type="warning" @click="cleanupStorage">清理存储空间</el-button>
           </el-form-item>
           <el-form-item>
             <el-button type="danger" @click="batchDelete" :disabled="selectedRecords.length === 0">
@@ -72,8 +72,8 @@
 
           <el-table-column label="来源" width="140">
             <template #default="{ row }">
-              <el-tag v-if="row.source === 'video'" type="success">🎬 视频帧 #{{ row.frame_number }}</el-tag>
-              <el-tag v-else type="primary">📸 图片识别</el-tag>
+              <el-tag v-if="row.source === 'video'" type="success">视频帧 #{{ row.frame_number }}</el-tag>
+              <el-tag v-else type="primary">图片识别</el-tag>
             </template>
           </el-table-column>
 
@@ -755,7 +755,7 @@ function batchDelete() {
   justify-content: center;
   margin: 30px 0;
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
   border-radius: 16px;
   color: white;
 }

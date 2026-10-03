@@ -44,15 +44,16 @@ onMounted(() => {
 }
 
 body {
-  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #F5F2E9;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: #F6F7FB;
   min-height: 100vh;
   color: #1A2456;
 }
 
 #app {
   min-height: 100vh;
-  background: #F5F2E9;
+  background: #F6F7FB;
 }
 
 /* 调整 Element Plus 消息提示位置，避免遮挡导航栏和按钮 */
@@ -69,7 +70,7 @@ body {
 /* 全局深色模式样式 */
 .dark body {
   background: #1A2456;
-  color: #F5F2E9;
+  color: #F6F7FB;
 }
 
 .dark #app {
@@ -79,8 +80,8 @@ body {
 /* Element Plus 全局深色模式样式 */
 .dark .el-card {
   background-color: #243566;
-  border-color: #5D4037;
-  color: #F5F2E9;
+  border-color: #334155;
+  color: #F6F7FB;
 }
 
 .dark .el-card__header {
@@ -111,12 +112,12 @@ body {
 }
 
 .dark .el-switch__core.is-checked {
-  background-color: #667eea;
+  background-color: #6366F1;
 }
 
 .dark .el-radio-button__orig-radio:checked + .el-radio-button__inner {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: #6366F1;
+  border-color: #6366F1;
 }
 
 .dark .el-select {
@@ -147,7 +148,7 @@ body {
 }
 
 .dark .el-select__option.is-selected {
-  background-color: #667eea;
+  background-color: #6366F1;
   color: white;
 }
 
@@ -183,13 +184,13 @@ body {
 }
 
 .dark .el-button--primary {
-  background-color: #B71C1C;
-  border-color: #B71C1C;
+  background-color: #6366F1;
+  border-color: #6366F1;
 }
 
 .dark .el-button--primary:hover {
-  background-color: #8B0000;
-  border-color: #8B0000;
+  background-color: #818CF8;
+  border-color: #818CF8;
 }
 
 /* 全局卡片样式 */
@@ -197,7 +198,7 @@ body {
   border-radius: 0.5rem;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
   transition: all 0.3s ease;
-  border: 1px solid #E8DCCA;
+  border: 1px solid #E2E8F0;
 }
 
 .el-card:hover {
@@ -205,37 +206,7 @@ body {
   transform: translateY(-2px);
 }
 
-/* 全局按钮样式 */
-.el-button--primary {
-  background-color: #1A2456;
-  border-color: #1A2456;
-  transition: all 0.3s ease;
-}
-
-.el-button--primary:hover {
-  background-color: rgba(26, 36, 86, 0.9);
-  border-color: rgba(26, 36, 86, 0.9);
-}
-
-.el-button--success {
-  background-color: #5D4037;
-  border-color: #5D4037;
-}
-
-.el-button--success:hover {
-  background-color: rgba(93, 64, 55, 0.9);
-  border-color: rgba(93, 64, 55, 0.9);
-}
-
-.el-button--danger {
-  background-color: #B71C1C;
-  border-color: #B71C1C;
-}
-
-.el-button--danger:hover {
-  background-color: rgba(183, 28, 28, 0.9);
-  border-color: rgba(183, 28, 28, 0.9);
-}
+/* 全局按钮样式：语义色交由 Element Plus 主题变量与默认色处理 */
 
 .dark .el-form-item__label {
   color: #e0e0e0;

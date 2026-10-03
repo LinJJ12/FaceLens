@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="header-content">
         <div>
-          <h1>📊 数据分析中心</h1>
+          <h1>数据分析中心</h1>
           <p>深入了解您的情绪模式和变化趋势</p>
         </div>
         <el-button size="small" type="primary" @click="exportPDFReport" :loading="isExporting">
@@ -18,7 +18,7 @@
     <el-card class="empty-state-card" shadow="hover" v-if="totalPredictions === 0">
       <el-empty description="还没有数据">
         <template #image>
-          <div style="font-size: 80px;">📊</div>
+          <el-icon style="font-size: 72px; color: #CBD5E1;"><component :is="'DataAnalysis'" /></el-icon>
         </template>
         <p style="color: #909399; margin-bottom: 1rem;">
           请先在首页上传照片进行情绪识别，系统会为您生成详细的数据分析
@@ -29,7 +29,7 @@
       </el-empty>
       <el-divider />
       <div style="color: #606266; line-height: 1.8;">
-        <h3 style="margin-bottom: 1rem;">📈 数据分析功能预览:</h3>
+        <h3 style="margin-bottom: 1rem;">数据分析功能预览</h3>
         <ul style="padding-left: 2rem;">
           <li>情绪分布饼图 - 直观展示各种情绪占比</li>
           <li>情绪趋势折线图 - 追踪情绪随时间的变化</li>
@@ -46,7 +46,7 @@
       <el-col :xs="12" :sm="12" :md="6" :lg="6">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-content">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
               <el-icon><data-line /></el-icon>
             </div>
             <div class="stat-info">
@@ -104,13 +104,13 @@
     <el-card class="data-source-card" shadow="hover" v-if="totalPredictions > 0">
       <template #header>
         <div class="card-header">
-          <span>📊 数据来源分布</span>
+          <span>数据来源分布</span>
         </div>
       </template>
       <el-row :gutter="20">
         <el-col :xs="24" :sm="12" :md="8">
           <div class="source-stat">
-            <div class="source-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+            <div class="source-icon" style="background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)">
               📸
             </div>
             <div class="source-info">
@@ -148,7 +148,7 @@
     <el-card class="video-analysis-card" shadow="hover" v-if="videoStore.videoHistory.length > 0">
       <template #header>
         <div class="card-header">
-          <span>🎬 视频情绪变化趋势</span>
+          <span>视频情绪变化趋势</span>
           <div style="display: flex; gap: 10px; align-items: center;">
             <el-select 
               v-model="selectedVideoId" 
@@ -274,7 +274,7 @@
           </div>
         </div>
         <div class="score-right">
-          <h3>💚 情绪健康评分</h3>
+          <h3>情绪健康评分</h3>
           <div class="score-details">
             <div class="detail-item">
               <span class="label">积极情绪占比:</span>
@@ -304,7 +304,7 @@
         <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📊 情绪分布</span>
+              <span>情绪分布</span>
               <el-tag>总计 {{ totalPredictions }} 次</el-tag>
             </div>
           </template>
@@ -317,7 +317,7 @@
         <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📈 情绪趋势</span>
+              <span>情绪趋势</span>
               <el-select v-model="trendPeriod" size="small" @change="updateTrendChart">
                 <el-option label="最近7天" value="7d" />
                 <el-option label="最近30天" value="30d" />
@@ -336,7 +336,7 @@
         <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>🎯 置信度分布</span>
+              <span>置信度分布</span>
             </div>
           </template>
           <div ref="confidenceChart" class="chart-container"></div>
@@ -348,7 +348,7 @@
         <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>🕐 时段分析</span>
+              <span>时段分析</span>
             </div>
           </template>
           <div ref="timeAnalysisChart" class="chart-container"></div>
@@ -360,7 +360,7 @@
     <el-card class="chart-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>📅 情绪日历</span>
+          <span>情绪日历</span>
           <el-tag>{{ currentYear }}年</el-tag>
         </div>
       </template>
@@ -371,7 +371,7 @@
     <el-card class="chart-card" shadow="hover" v-if="totalPredictions > 0">
       <template #header>
         <div class="card-header">
-          <span>📊 周期对比分析</span>
+          <span>周期对比分析</span>
           <el-radio-group v-model="comparisonPeriod" size="small" @change="updateComparisonChart">
             <el-radio-button label="week">本周 vs 上周</el-radio-button>
             <el-radio-button label="month">本月 vs 上月</el-radio-button>
@@ -1368,7 +1368,7 @@ function updateVideoEmotionChart() {
         smooth: true,
         yAxisIndex: 0,
         itemStyle: {
-          color: '#667eea'
+          color: '#6366F1'
         },
         areaStyle: {
           color: {
@@ -1852,7 +1852,7 @@ onMounted(() => {
 }
 
 .score-circle.excellent {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
 }
 
 .score-circle.good {

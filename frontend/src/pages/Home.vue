@@ -4,7 +4,7 @@
     <div class="hero-section">
       <div class="hero-content">
         <h1 class="hero-title">
-          <span class="gradient-text">🎯 智能情绪识别系统</span>
+          <span class="gradient-text">智能情绪识别系统</span>
         </h1>
         <p class="hero-subtitle">基于深度学习的人脸情绪分析平台</p>
         <p class="hero-description">利用先进的卷积神经网络技术，准确识别7种基本情绪表情</p>
@@ -43,12 +43,12 @@
 
     <!-- 功能特性 -->
     <div class="features-section">
-      <h2 class="section-title">✨ 核心功能</h2>
+      <h2 class="section-title">核心功能</h2>
       <el-row :gutter="30">
         <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="feature in features" :key="feature.title" class="feature-col">
           <el-card class="feature-card" shadow="hover" @click="handleFeatureClick(feature.route)">
             <div class="feature-icon" :style="{ background: feature.color }">
-              {{ feature.icon }}
+              <el-icon :size="34"><component :is="feature.icon" /></el-icon>
             </div>
             <h3 class="feature-title">{{ feature.title }}</h3>
             <p class="feature-desc">{{ feature.description }}</p>
@@ -59,11 +59,11 @@
 
     <!-- AI模型介绍 -->
     <div class="models-section">
-      <h2 class="section-title">🧠 AI模型</h2>
+      <h2 class="section-title">AI 模型</h2>
       <el-row :gutter="20">
         <el-col :xs="24" :sm="12" :md="6" v-for="model in models" :key="model.name">
           <el-card class="model-card" shadow="hover">
-            <div class="model-badge" v-if="model.recommended">⭐ 推荐</div>
+            <div class="model-badge" v-if="model.recommended">推荐</div>
             <div class="model-name">{{ model.name }}</div>
             <div class="model-accuracy">
               <el-progress 
@@ -87,7 +87,7 @@
     <!-- 快速开始指南 -->
     <div class="quick-start-section">
       <el-card class="quick-start-card">
-        <h2 class="section-title">🚀 快速开始</h2>
+        <h2 class="section-title">快速开始</h2>
         <el-steps :active="0" align-center>
           <el-step title="上传图片" description="支持JPG/PNG格式" icon="Upload" />
           <el-step title="选择模型" description="4种AI模型可选" icon="Setting" />
@@ -105,7 +105,7 @@
 
     <!-- 最近识别历史 -->
     <div class="recent-section" v-if="emotionStore.predictions.length > 0">
-      <h2 class="section-title">🕐 最近识别</h2>
+      <h2 class="section-title">最近识别</h2>
       <el-row :gutter="16">
         <el-col :xs="24" :sm="12" :md="8" :lg="6" 
                 v-for="(pred, index) in recentPredictions" 
@@ -156,60 +156,60 @@ const emotions = [
 // 功能特性
 const features = [
   {
-    icon: '📸',
+    icon: 'Camera',
     title: '图片识别',
     description: '上传图片快速识别情绪',
     route: '/image-analysis',
-    color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+    color: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)'
   },
   {
-    icon: '🎬',
+    icon: 'VideoCamera',
     title: '视频分析',
     description: '逐帧分析视频情绪变化',
     route: '/video',
-    color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+    color: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)'
   },
   {
-    icon: '💚',
+    icon: 'FirstAidKit',
     title: '心理健康',
     description: '个性化心理健康建议',
     route: '/health',
-    color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
+    color: 'linear-gradient(135deg, #14B8A6 0%, #2DD4BF 100%)'
   },
   {
-    icon: '📊',
+    icon: 'DataAnalysis',
     title: '数据分析',
     description: '可视化情绪统计图表',
     route: '/data-analysis',
-    color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
+    color: 'linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%)'
   },
   {
-    icon: '📜',
+    icon: 'Clock',
     title: '历史记录',
     description: '查看所有识别历史',
     route: '/history',
-    color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
+    color: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)'
   },
   {
-    icon: '👤',
+    icon: 'User',
     title: '个人中心',
     description: '管理个人信息和设置',
     route: '/user',
-    color: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)'
+    color: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)'
   },
   {
-    icon: '⚙️',
+    icon: 'Setting',
     title: '系统管理',
     description: '用户和权限管理',
     route: '/admin',
-    color: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)'
+    color: 'linear-gradient(135deg, #14B8A6 0%, #2DD4BF 100%)'
   },
   {
-    icon: '❓',
+    icon: 'InfoFilled',
     title: '关于系统',
     description: '了解系统详细信息',
     route: '/about',
-    color: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)'
+    color: 'linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%)'
   }
 ]
 
@@ -218,7 +218,7 @@ const models = [
   {
     name: 'CNN',
     accuracy: 83.77,
-    color: '#667eea',
+    color: '#6366F1',
     recommended: true,
     tags: ['快速', '准确'],
     description: '经典卷积神经网络，平衡速度与精度'
@@ -323,13 +323,14 @@ onMounted(() => {
   font-weight: 700;
   margin-bottom: 20px;
   line-height: 1.2;
-  font-family: 'Playfair Display', serif;
   color: #1A2456;
 }
 
 .gradient-text {
-  color: #B71C1C;
-  font-style: italic;
+  background: linear-gradient(135deg, #4F46E5 0%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .hero-subtitle {
@@ -360,13 +361,13 @@ onMounted(() => {
 }
 
 .floating-card {
-  background: rgba(232, 220, 202, 0.3);
+  background: rgba(226, 232, 240, 0.3);
   border-radius: 20px;
   padding: 30px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
   animation: float 3s ease-in-out infinite;
   max-width: 500px;
-  border: 1px solid #E8DCCA;
+  border: 1px solid #E2E8F0;
 }
 
 @keyframes float {
@@ -409,7 +410,7 @@ onMounted(() => {
   transition: all 0.3s ease;
   animation: fadeInUp 0.6s ease-out backwards;
   min-width: 90px;
-  border: 1px solid #E8DCCA;
+  border: 1px solid #E2E8F0;
 }
 
 .emotion-item:hover {
@@ -441,11 +442,24 @@ onMounted(() => {
 /* 章节标题 */
 .section-title {
   text-align: center;
-  font-size: 32px;
+  font-size: 30px;
   font-weight: 700;
   margin-bottom: 40px;
   color: #1A2456;
-  font-family: 'Playfair Display', serif;
+  position: relative;
+  padding-bottom: 14px;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #6366F1, #8B5CF6);
 }
 
 /* 功能特性 */
@@ -469,7 +483,7 @@ onMounted(() => {
 
 .feature-card:hover {
   transform: translateY(-8px);
-  border-color: #1A2456;
+  border-color: rgba(79, 70, 229, 0.45);
   box-shadow: 0 20px 25px -5px rgba(26, 36, 86, 0.15), 0 10px 10px -5px rgba(26, 36, 86, 0.08);
 }
 
@@ -524,13 +538,13 @@ onMounted(() => {
   position: absolute;
   top: 10px;
   right: 10px;
-  background: #B71C1C;
+  background: #4F46E5;
   color: white;
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(183, 28, 28, 0.3);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
 
 .model-name {
@@ -538,7 +552,6 @@ onMounted(() => {
   font-weight: 600;
   margin-bottom: 20px;
   color: #1A2456;
-  font-family: 'Playfair Display', serif;
 }
 
 .model-accuracy {
@@ -569,8 +582,8 @@ onMounted(() => {
 }
 
 .quick-start-card {
-  background: rgba(232, 220, 202, 0.2);
-  border: 2px solid #E8DCCA;
+  background: rgba(226, 232, 240, 0.2);
+  border: 2px solid #E2E8F0;
 }
 
 .quick-start-actions {
