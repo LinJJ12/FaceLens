@@ -393,7 +393,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useEmotionStore } from '../stores/emotion'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -436,7 +436,8 @@ const allPredictions = computed(() => {
 
   // 本地图片预测：仅补充服务端没有的（离线/历史遗留）记录
   ;(emotionStore.predictions || []).forEach(pred => {
-    if (pred.history_id) return // 服务端保存成功过的记录以服务端为准
+    // 仅当服务端已拉取到同 ID 记录时跳过；分页外的服务端记录由本地副本兜底展示
+    if (pred.history_id && serverHistoryIds.has(pred.history_id)) return
     records.push({
       ...pred,
       source: 'image',
@@ -454,7 +455,7 @@ const allPredictions = computed(() => {
             emotion: frame.emotion,
             emotion_cn: frame.emotion_cn,
             confidence: frame.confidence,
-            timestamp: frame.timestamp || video.timestamp,
+            timestamp: video.timestamp, // frame.timestamp 是视频内秒数，不能当日期
             model_used: video.model || 'CNN',
             source: 'video',
             video_id: video.video_id,
@@ -855,6 +856,41 @@ const confidenceChart = ref(null)
 const timeAnalysisChart = ref(null)
 const emotionCalendarChart = ref(null)
 
+// 图表实例注册表：复用实例，避免数据刷新时重复 echarts.init 产生孤儿实例
+// （旧实现每次 initAllCharts 都新建实例 + 追加 resize 监听器，长时间使用持续泄漏）
+const chartInstances = {}
+let chartsResizeBound = false
+function handleChartsResize() {
+  Object.values(chartInstances).forEach((c) => {
+    if (c && !c.isDisposed()) c.resize()
+  })
+}
+function getChart(name, el) {
+  if (!el) return null
+  const existing = chartInstances[name]
+  if (existing && !existing.isDisposed() && existing.getDom() === el) {
+    existing.clear() // 清空旧配置，随后的 setOption 以干净状态重建
+    return existing
+  }
+  if (existing && !existing.isDisposed()) existing.dispose()
+  const chart = echarts.init(el)
+  chartInstances[name] = chart
+  if (!chartsResizeBound) {
+    chartsResizeBound = true
+    window.addEventListener('resize', handleChartsResize)
+  }
+  return chart
+}
+onUnmounted(() => {
+  if (chartsResizeBound) {
+    window.removeEventListener('resize', handleChartsResize)
+    chartsResizeBound = false
+  }
+  Object.values(chartInstances).forEach((c) => {
+    try { if (!c.isDisposed()) c.dispose() } catch (e) { /* 忽略 */ }
+  })
+})
+
 const trendPeriod = ref('7d')
 const currentYear = ref(new Date().getFullYear())
 
@@ -862,7 +898,7 @@ const currentYear = ref(new Date().getFullYear())
 function initPieChart() {
   if (!emotionPieChart.value) return
   
-  const chart = echarts.init(emotionPieChart.value)
+  const chart = getChart('pie', emotionPieChart.value)
   
   // 统计情绪分布
   const emotionCounts = {}
@@ -919,7 +955,6 @@ function initPieChart() {
   chart.setOption(option)
   
   // 响应式
-  window.addEventListener('resize', () => chart.resize())
 }
 
 // 初始化趋势图
@@ -930,7 +965,7 @@ function initTrendChart() {
 function updateTrendChart() {
   if (!emotionTrendChart.value) return
   
-  const chart = echarts.init(emotionTrendChart.value)
+  const chart = getChart('trend', emotionTrendChart.value)
   
   // 获取时间范围
   let days = 7
@@ -991,14 +1026,13 @@ function updateTrendChart() {
   }
   
   chart.setOption(option)
-  window.addEventListener('resize', () => chart.resize())
 }
 
 // 初始化置信度分布图
 function initConfidenceChart() {
   if (!confidenceChart.value) return
   
-  const chart = echarts.init(confidenceChart.value)
+  const chart = getChart('confidence', confidenceChart.value)
   
   // 按区间统计
   const ranges = [
@@ -1059,14 +1093,13 @@ function initConfidenceChart() {
   }
   
   chart.setOption(option)
-  window.addEventListener('resize', () => chart.resize())
 }
 
 // 初始化时段分析图
 function initTimeAnalysisChart() {
   if (!timeAnalysisChart.value) return
   
-  const chart = echarts.init(timeAnalysisChart.value)
+  const chart = getChart('time', timeAnalysisChart.value)
   
   // 按小时统计
   const hourCounts = Array(24).fill(0)
@@ -1106,14 +1139,13 @@ function initTimeAnalysisChart() {
   }
   
   chart.setOption(option)
-  window.addEventListener('resize', () => chart.resize())
 }
 
 // 初始化日历热力图
 function initCalendarChart() {
   if (!emotionCalendarChart.value) return
   
-  const chart = echarts.init(emotionCalendarChart.value)
+  const chart = getChart('calendar', emotionCalendarChart.value)
   
   // 准备日历数据
   const dateMap = {}
@@ -1164,7 +1196,6 @@ function initCalendarChart() {
   }
   
   chart.setOption(option)
-  window.addEventListener('resize', () => chart.resize())
 }
 
 
@@ -1179,7 +1210,7 @@ function initComparisonChart() {
 function updateComparisonChart() {
   if (!comparisonChart.value) return
   
-  const chart = echarts.init(comparisonChart.value)
+  const chart = getChart('comparison', comparisonChart.value)
   const now = new Date()
   let currentData = {}
   let previousData = {}
@@ -1305,14 +1336,13 @@ function updateComparisonChart() {
   }
   
   chart.setOption(option)
-  window.addEventListener('resize', () => chart.resize())
 }
 
 // 视频情绪变化图表
 function updateVideoEmotionChart() {
   if (!videoEmotionChart.value || !selectedVideoData.value) return
   
-  const chart = echarts.init(videoEmotionChart.value)
+  const chart = getChart('videoEmotion', videoEmotionChart.value)
   const timeline = selectedVideoData.value.timeline
   
   // 准备数据
@@ -1427,7 +1457,6 @@ function updateVideoEmotionChart() {
   }
   
   chart.setOption(option)
-  window.addEventListener('resize', () => chart.resize())
 }
 
 // 导出PDF报告 - 完全基于html2canvas渲染解决中文乱码问题

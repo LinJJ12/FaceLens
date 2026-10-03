@@ -1,23 +1,24 @@
 """
-完整的数据库迁移脚本
+完整的数据库迁移脚本（幂等，可安全重复执行）
 1. 添加 UserEmotionSummary 缺失的字段
 2. 添加 HealthAssessment 缺失的字段
-3. 清理旧数据，让系统重新生成
+3. 仅当显式传入 --reset-data 时才清理旧数据（避免重复运行误删统计数据）
 """
 import sqlite3
 import os
+import sys
 from _db_path import resolve_db_path
 
-def migrate():
+def migrate(reset_data=False):
     db_path = str(resolve_db_path())
-    
+
     if not os.path.exists(db_path):
         print(f"❌ 数据库文件不存在: {db_path}")
         return
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     try:
         print("=" * 60)
         print("开始数据库迁移...")
@@ -61,26 +62,29 @@ def migrate():
                 cursor.execute(f"ALTER TABLE health_assessment ADD COLUMN {field_name} {field_type}")
                 print(f"    ✅ 已添加")
         
-        # ========== 3. 清理旧数据 ==========
-        print("\n【3/3】清理旧数据...")
-        
+        # ========== 3. 可选的数据清理（仅显式传入 --reset-data 时执行） ==========
+        print("\n【3/3】数据清理检查...")
+
         # 统计现有数据
         cursor.execute("SELECT COUNT(*) FROM user_emotion_summary")
         summary_count = cursor.fetchone()[0]
-        
+
         cursor.execute("SELECT COUNT(*) FROM health_assessment")
         assessment_count = cursor.fetchone()[0]
-        
+
         print(f"  user_emotion_summary: {summary_count} 条记录")
         print(f"  health_assessment: {assessment_count} 条记录")
-        
+
         if summary_count > 0 or assessment_count > 0:
-            print("\n  建议：删除旧数据以使用新的表结构")
-            print("  执行清理...")
-            cursor.execute("DELETE FROM user_emotion_summary")
-            cursor.execute("DELETE FROM health_assessment")
-            print("  ✅ 已清理旧数据")
-            print("  提示：重新上传图片识别后会自动生成新格式的数据")
+            if reset_data:
+                print("\n  --reset-data 已指定，执行清理...")
+                cursor.execute("DELETE FROM user_emotion_summary")
+                cursor.execute("DELETE FROM health_assessment")
+                print("  ✅ 已清理旧数据")
+                print("  提示：重新上传图片识别后会自动生成新格式的数据")
+            else:
+                print("\n  跳过数据清理（保留现有统计数据）。")
+                print("  如确需清空这两张表重新生成，请显式运行: python scripts/migrate_database.py --reset-data")
         
         conn.commit()
         print("\n" + "=" * 60)
@@ -100,4 +104,4 @@ def migrate():
         conn.close()
 
 if __name__ == '__main__':
-    migrate()
+    migrate(reset_data='--reset-data' in sys.argv)

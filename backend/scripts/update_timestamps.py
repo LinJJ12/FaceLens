@@ -1,8 +1,9 @@
 """
-更新用户情绪汇总和健康评估记录的时间字段
+更新用户情绪汇总和健康评估记录的时间字段（危险操作：重写全部时间戳，需显式传入 --yes）
 将所有记录的 updated_at 和 created_at 设置为当前时间
 """
 
+import sys
 import _bootstrap  # noqa: F401
 from src.storage.database import db, UserEmotionSummary, HealthAssessment
 from src.api.app import app
@@ -11,6 +12,11 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+if '--yes' not in sys.argv:
+    print('⚠️  该脚本会把所有记录的时间戳重写为当前时间，破坏原有时间线。')
+    print('    确认执行请运行: python scripts/update_timestamps.py --yes')
+    sys.exit(1)
 
 def update_timestamps():
     """更新所有记录的时间戳为当前时间"""

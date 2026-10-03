@@ -274,7 +274,7 @@
                 <el-icon><connection /></el-icon>
               </div>
               <div class="stat-info">
-                <div class="stat-value">{{ videoStore.emotionTimeline?.total_transitions || 0 }}</div>
+                <div class="stat-value">{{ videoStore.emotionTransitions?.length || 0 }}</div>
                 <div class="stat-label">情绪转换次数</div>
               </div>
             </div>
@@ -467,7 +467,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElNotification } from 'element-plus'
 import {
   UploadFilled,
@@ -630,6 +630,14 @@ async function uploadVideo() {
 let analysisTimer = null
 let analysisStartTime = 0
 const analysisElapsed = ref(0)
+
+// 离开页面时必须清理定时器，否则分析进行中跳路由后定时器会永久运行
+onUnmounted(() => {
+  if (analysisTimer) {
+    clearInterval(analysisTimer)
+    analysisTimer = null
+  }
+})
 
 async function startAnalysis() {
   if (!videoStore.currentVideo) {

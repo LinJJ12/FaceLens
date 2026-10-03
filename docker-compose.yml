@@ -15,7 +15,7 @@ services:
     container_name: emotion-backend
     restart: unless-stopped
     environment:
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
       DATABASE_URL: ${DATABASE_URL:-}
     volumes:
       # 模型权重（只读挂载）

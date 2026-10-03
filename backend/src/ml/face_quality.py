@@ -26,25 +26,25 @@ def assess_face_quality(image: Image.Image) -> Dict:
         gray = np.array(image.convert('L'))
     else:
         gray = np.array(image)
-    
+
     # 1. 评估模糊度 (使用拉普拉斯方差)
-    blur_score = _assess_blur(gray)
-    
+    blur_score = float(_assess_blur(gray))
+
     # 2. 评估亮度
-    brightness = _assess_brightness(gray)
-    
+    brightness = float(_assess_brightness(gray))
+
     # 3. 评估对比度
-    contrast = _assess_contrast(gray)
-    
+    contrast = float(_assess_contrast(gray))
+
     # 4. 计算综合质量分
-    quality_score = _calculate_quality_score(blur_score, brightness, contrast)
-    
+    quality_score = float(_calculate_quality_score(blur_score, brightness, contrast))
+
     # 5. 生成警告信息
     warnings = _generate_warnings(blur_score, brightness, contrast)
-    
-    # 6. 判断是否可接受
-    is_acceptable = quality_score >= 50 and len(warnings) == 0
-    
+
+    # 6. 判断是否可接受（显式转 bool：numpy 比较结果为 np.bool_，无法 JSON 序列化）
+    is_acceptable = bool(quality_score >= 50 and len(warnings) == 0)
+
     return {
         'blur_score': round(blur_score, 2),
         'brightness': round(brightness, 2),

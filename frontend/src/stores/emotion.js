@@ -1,8 +1,7 @@
 ﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../api/client'
-import storageManager from '../utils/storage'
-import { 
+import {
   saveImagePredictions, 
   loadImagePredictions, 
   clearImagePredictions,
@@ -22,10 +21,12 @@ export const useEmotionStore = defineStore('emotion', () => {
   const serverHistoriesLoading = ref(false)
   const serverHistoriesError = ref(false)
 
-  // 获取当前用户名
+  // 获取当前用户名（与 video store 保持一致，直接读 localStorage 的登录态。
+  // 此前经由 IndexedDB 的 storageManager 读取，登录/登出不会同步过去，
+  // 会导致预测记录串号或"丢失"）
   async function getCurrentUsername() {
     try {
-      const userInfo = await storageManager.getItem('userInfo')
+      const userInfo = localStorage.getItem('userInfo')
       if (userInfo) {
         const user = JSON.parse(userInfo)
         return user.username || 'guest'

@@ -13,8 +13,10 @@ import base64
 from PIL import Image
 import io
 import os
+import re
 import sys
 import platform
+import threading
 from datetime import datetime
 from typing import Tuple, Optional
 from src.ml.image_preprocess import (
@@ -22,10 +24,11 @@ from src.ml.image_preprocess import (
     infer_input_shape_from_keras,
     infer_input_shape_from_saved_model,
     detect_and_align_mtcnn,
-    enhance_clarity,
+    get_mtcnn_detector,
+    get_haar_cascade,
 )
 from src.ml.face_quality import assess_face_quality, get_quality_level
-from src.auth import auth_bp, token_required, token_required_or_query, admin_required, verify_token, get_user_by_id, hash_password
+from src.auth import auth_bp, token_required, token_required_or_query, admin_required, hash_password
 from sqlalchemy import text
 from sqlalchemy.orm.attributes import flag_modified
 from src.ml.video_processor import (
@@ -39,18 +42,44 @@ from src.config.settings import (
     UPLOAD_FOLDER,
     DATABASE_URI,
     SQLITE_PATH,
+    LOG_DIR,
+    MAX_CONTENT_LENGTH,
+    MAX_IMAGE_BYTES,
+    MAX_VIDEO_BYTES,
+    CORS_ORIGINS,
+    EMOTION_LABELS,
+    EMOTION_LABELS_CN,
+    EMOTION_EN_TO_CN,
+    EMOTION_CN_TO_EN,
+    EMOTION_VALENCE,
+    POSITIVE_EMOTIONS,
+    NEGATIVE_EMOTIONS,
+)
+from src.api.health import (
+    health_bp,
+    health_score_to_level,
+    positive_rate_to_alert,
 )
 import logging
 import time
 from functools import wraps
 from pathlib import Path
 from werkzeug.utils import secure_filename
+from logging.handlers import RotatingFileHandler
 
-# 配置日志
+# 配置日志（控制台 + 文件；文件供管理后台"系统日志"查看，Docker 下 gunicorn 入口同样生效）
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+try:
+    _file_handler = RotatingFileHandler(
+        LOG_DIR / 'app.log', maxBytes=2 * 1024 * 1024, backupCount=3, encoding='utf-8'
+    )
+    _file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(_file_handler)
+except Exception:  # 只读文件系统等场景下退化为仅控制台
+    pass
 logger = logging.getLogger(__name__)
 
 UPLOAD_ROOT = Path(UPLOAD_FOLDER).resolve()
@@ -104,18 +133,16 @@ def _user_can_access_upload(rel_path: str, current_user: dict) -> bool:
 
 
 app = Flask(__name__)
-CORS(app)  # 允许跨域请求
+# 允许跨域请求（生产环境建议通过 CORS_ORIGINS 环境变量配置白名单）
+CORS(app, origins=CORS_ORIGINS or '*')  # noqa: E501
 
 # 服务启动时间（用于系统信息中的运行时长）
 APP_START_TIME = time.time()
 
-# 上传限制（默认）
-# 整体请求大小上限（防止恶意请求导致内存耗尽）
-app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # 64 MB
-# 图像单文件最大限制（前端建议16MB）
-app.config['MAX_IMAGE_BYTES'] = 16 * 1024 * 1024
-# 视频单文件最大限制（可根据需要调整）
-app.config['MAX_VIDEO_BYTES'] = 200 * 1024 * 1024
+# 上传限制（统一来自 settings，避免多处上限不一致）
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+app.config['MAX_IMAGE_BYTES'] = MAX_IMAGE_BYTES
+app.config['MAX_VIDEO_BYTES'] = MAX_VIDEO_BYTES
 
 # 数据库配置 (SQLite 默认，可按需改为其他 DB)
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
@@ -123,7 +150,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # 导入并初始化数据库模块
 from src.storage.database import (
-    db, init_db, PredictionHistory, User, 
+    db, init_db, PredictionHistory, User,
     UserEmotionSummary, HealthAssessment,
     VideoAnalysisResult, EmotionJournal, GratitudeRecord
 )
@@ -133,12 +160,7 @@ init_db(app)
 app.register_blueprint(auth_bp)
 
 # 注册心理健康API蓝图
-from src.api.health import health_bp
 app.register_blueprint(health_bp)
-
-# 情绪类别标签
-EMOTION_LABELS = ['anger', 'disgust', 'fear', 'happy', 'normal', 'sad', 'surprised']
-EMOTION_LABELS_CN = ['生气', '厌恶', '害怕', '高兴', '平静', '悲伤', '惊讶']
 
 # 全局变量存储已加载的模型
 models = {}
@@ -222,6 +244,94 @@ def run_inference(model_entry, x: np.ndarray) -> np.ndarray:
     return outputs[out_key].numpy()
 
 
+# 模型字典的加载锁：避免并发首个请求重复加载同一模型
+_MODELS_LOCK = threading.Lock()
+
+
+def _get_model_entry(model_name):
+    """按需加载并缓存模型；加载失败返回 None。"""
+    if model_name in models:
+        return models[model_name]
+    with _MODELS_LOCK:
+        if model_name not in models:
+            model_entry = load_model(model_name)
+            if model_entry is None:
+                return None
+            models[model_name] = model_entry
+    return models[model_name]
+
+
+def _preprocess_mode(model_name):
+    if model_name == 'vgg':
+        return 'vgg'
+    if model_name in ('se81', 'se83'):
+        return 'efficientnet'
+    return 'simple'
+
+
+def _predict_face_emotion(image, model_name, model_entry, detect_face=True):
+    """
+    单张人脸图像的完整预测管线（检测 → 对齐 → 质量评估 → 预处理 → 推理）。
+    单图 / 批量 / 视频帧三条路径共用，保证行为一致。
+    返回 dict，失败抛异常。
+    """
+    quality_start = time.time()
+    if detect_face:
+        # 用于前端显示：只检测和裁剪，不旋转对齐（避免黑边）
+        display_face = detect_face_for_display(image)
+        # 用于模型预测：完整的检测和对齐流程（可能有黑边，但模型需要）
+        aligned = detect_and_align_mtcnn(image)
+        pred_image = aligned if aligned is not None else detect_face(image)
+    else:
+        display_face = image.copy()
+        pred_image = display_face
+    aligned_face = display_face
+
+    quality_result = assess_face_quality(aligned_face)
+    quality_time = time.time() - quality_start
+
+    preprocess_start = time.time()
+    fallback = (96, 96, 1) if model_name == 'cnn' else (224, 224, 3)
+    processed_image = preprocess_for_model(
+        pred_image,
+        model=model_entry['obj'] if model_entry['type'] == 'keras' else None,
+        loaded=model_entry['obj'] if model_entry['type'] == 'saved' else None,
+        fallback=model_entry.get('input_shape') or fallback,
+        mode=_preprocess_mode(model_name)
+    )
+    if processed_image is None:
+        raise ValueError('图像预处理失败')
+    preprocess_time = time.time() - preprocess_start
+
+    inference_start = time.time()
+    predictions = run_inference(model_entry, processed_image)
+    predicted_class = int(np.argmax(predictions[0]))
+    inference_time = time.time() - inference_start
+
+    return {
+        'emotion': EMOTION_LABELS[predicted_class],
+        'emotion_cn': EMOTION_LABELS_CN[predicted_class],
+        'confidence': float(predictions[0][predicted_class]),
+        'probabilities': {
+            EMOTION_LABELS[i]: float(predictions[0][i])
+            for i in range(len(EMOTION_LABELS))
+        },
+        'probabilities_cn': {
+            EMOTION_LABELS_CN[i]: float(predictions[0][i])
+            for i in range(len(EMOTION_LABELS))
+        },
+        'aligned_face': aligned_face,
+        'face_image_data_url': _pil_to_data_url(aligned_face),
+        'quality': quality_result,
+        'timings': {
+            'quality_assessment_time': round(quality_time, 3),
+            'preprocessing_time': round(preprocess_time, 3),
+            'inference_time': round(inference_time, 3),
+            'total_time': round(quality_time + preprocess_time + inference_time, 3),
+        },
+    }
+
+
 def _batch_array_to_data_url(arr: np.ndarray) -> str:
     """将形状为 (1,H,W,C) 且范围[0,1]的数组转为 data:image/jpeg;base64, 字符串。"""
     try:
@@ -302,15 +412,16 @@ def detect_face(image):
         # 转换为OpenCV格式
         img_array = np.array(image)
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        
-        # 加载人脸检测器
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        )
-        
+
+        # 级联检测器只加载一次（重复加载 xml 每次都要磁盘 IO + 编译）
+        face_cascade = get_haar_cascade()
+        if face_cascade is None:
+            logger.warning("Haar 级联加载失败，跳过人脸检测")
+            return image
+
         # 检测人脸
         faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-        
+
         if len(faces) > 0:
             # 取第一张人脸
             x, y, w, h = faces[0]
@@ -334,39 +445,39 @@ def detect_face_for_display(image, margin_ratio=0.2):
         face_image: 干净裁剪的人脸图像（不含旋转黑边）
     """
     try:
-        from mtcnn import MTCNN
-        detector = MTCNN()
-        rgb = image.convert('RGB')
-        res = detector.detect_faces(np.array(rgb))
-        
-        if res:
-            # 选择置信度最高的人脸
-            face = max(res, key=lambda d: d.get('confidence', 0))
-            x, y, w, h = face['box']
-            
-            # 添加边距，确保不超出图像边界
-            margin_w = int(w * margin_ratio)
-            margin_h = int(h * margin_ratio)
-            x1 = max(0, x - margin_w)
-            y1 = max(0, y - margin_h)
-            x2 = min(rgb.width, x + w + margin_w)
-            y2 = min(rgb.height, y + h + margin_h)
-            
-            # 裁剪人脸区域
-            face_crop = rgb.crop((x1, y1, x2, y2))
-            logger.info(f"✂️  MTCNN 人脸裁剪成功 (置信度: {face['confidence']:.2%})")
-            return face_crop
+        detector = get_mtcnn_detector()
+        if detector is not None:
+            rgb = image.convert('RGB')
+            res = detector.detect_faces(np.array(rgb))
+
+            if res:
+                # 选择置信度最高的人脸
+                face = max(res, key=lambda d: d.get('confidence', 0))
+                x, y, w, h = face['box']
+
+                # 添加边距，确保不超出图像边界
+                margin_w = int(w * margin_ratio)
+                margin_h = int(h * margin_ratio)
+                x1 = max(0, x - margin_w)
+                y1 = max(0, y - margin_h)
+                x2 = min(rgb.width, x + w + margin_w)
+                y2 = min(rgb.height, y + h + margin_h)
+
+                # 裁剪人脸区域
+                face_crop = rgb.crop((x1, y1, x2, y2))
+                logger.info(f"✂️  MTCNN 人脸裁剪成功 (置信度: {face['confidence']:.2%})")
+                return face_crop
     except Exception as e:
         logger.warning(f"MTCNN 检测失败，回退到 Haar 检测: {str(e)}")
-    
+
     # 回退方案：使用 Haar 级联检测
     try:
         img_array = np.array(image.convert('RGB'))
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        )
+
+        face_cascade = get_haar_cascade()
+        if face_cascade is None:
+            return image
         faces = face_cascade.detectMultiScale(gray, 1.3, 5)
         
         if len(faces) > 0:
@@ -412,179 +523,118 @@ def get_models():
         })
     return jsonify({'models': model_info})
 
-def update_health_tables(username, emotion, emotion_cn, confidence, probabilities_cn):
+def update_health_tables(username, emotion, emotion_cn, confidence):
     """
-    更新健康相关的数据表
-    - UserEmotionSummary: 每日情绪统计汇总
-    - HealthAssessment: 心理健康评估
+    更新健康相关的数据表（每次预测/每帧视频分析调用一次）
+    - UserEmotionSummary: 每日情绪统计汇总（按 用户+日期 upsert）
+    - HealthAssessment: 心理健康评估（按 用户+日期 upsert，一天至多一条）
+
+    口径约定（与前端 Analysis.vue / Health.vue 及 health.py 实时计算路径保持一致）：
+    - 积极 = happy/normal，消极 = anger/sad/fear/disgust，中性 = surprised
+    - positive_rate / negative_rate 一律为 0-100 百分数
+    - 健康得分 = 积极% * 0.4 + (100 - 消极%) * 0.3 + 稳定性 * 0.3
     """
     try:
         from datetime import date
         today = date.today()
-        
+        cn = emotion_cn or EMOTION_EN_TO_CN.get(emotion, emotion)
+
         # 1. 更新或创建今天的情绪统计汇总
         summary = UserEmotionSummary.query.filter_by(
             username=username,
             summary_date=today
         ).first()
-        
+
         if summary:
-            # 更新现有记录
             summary.total_predictions += 1
-            
-            # 更新情绪计数
-            emotion_counts = summary.emotion_counts or {}
-            emotion_counts[emotion_cn] = emotion_counts.get(emotion_cn, 0) + 1
-            summary.emotion_counts = emotion_counts
+            total = summary.total_predictions
+            counts = dict(summary.emotion_counts or {})
+            counts[cn] = counts.get(cn, 0) + 1
+            summary.emotion_counts = counts
             # 标记 JSON 字段已修改（SQLAlchemy 需要）
             flag_modified(summary, 'emotion_counts')
-            
-            # 更新主导情绪（中文）
-            dominant_emotion_cn = max(emotion_counts, key=emotion_counts.get)
-            summary.dominant_emotion_cn = dominant_emotion_cn
-            summary.dominant_emotion_count = emotion_counts[dominant_emotion_cn]
-            
-            # 同时更新英文主导情绪
-            cn_to_en = {
-                '生气': 'anger', '厌恶': 'disgust', '害怕': 'fear',
-                '高兴': 'happy', '平静': 'normal', '悲伤': 'sad', '惊讶': 'surprise'
-            }
-            summary.dominant_emotion = cn_to_en.get(dominant_emotion_cn, dominant_emotion_cn)
-            
-            # 重新计算正负面情绪比例
-            positive_emotions = ['happy', 'surprise']
-            negative_emotions = ['sad', 'angry', 'disgust', 'fear']
-            
-            # 使用正确的中文标签：['生气', '厌恶', '害怕', '高兴', '平静', '悲伤', '惊讶']
-            positive_count = sum(emotion_counts.get(e, 0) for e in ['高兴', '惊讶'])
-            negative_count = sum(emotion_counts.get(e, 0) for e in ['悲伤', '生气', '厌恶', '害怕'])
-            neutral_count = emotion_counts.get('平静', 0)
-            
-            # 更新计数字段
-            summary.positive_count = positive_count
-            summary.negative_count = negative_count
-            summary.neutral_count = neutral_count
-            
-            total = summary.total_predictions
-            summary.positive_rate = round(positive_count / total, 2) if total > 0 else 0
-            summary.negative_rate = round(negative_count / total, 2) if total > 0 else 0
-            
-            # 计算平均置信度
-            if summary.avg_confidence:
-                summary.avg_confidence = round((summary.avg_confidence * (total - 1) + confidence) / total, 2)
-            else:
-                summary.avg_confidence = round(confidence, 2)
-            
-            summary.updated_at = datetime.now()
         else:
-            # 创建新记录
-            positive_emotions_cn = ['高兴', '惊讶']
-            negative_emotions_cn = ['悲伤', '生气', '厌恶', '害怕']
-            
-            is_positive = emotion_cn in positive_emotions_cn
-            is_negative = emotion_cn in negative_emotions_cn
-            
-            # 中文到英文的映射
-            cn_to_en = {
-                '生气': 'anger', '厌恶': 'disgust', '害怕': 'fear',
-                '高兴': 'happy', '平静': 'normal', '悲伤': 'sad', '惊讶': 'surprise'
-            }
-            
+            total = 1
+            counts = {cn: 1}
             summary = UserEmotionSummary(
                 username=username,
                 summary_date=today,
-                total_predictions=1,
-                dominant_emotion=cn_to_en.get(emotion_cn, emotion),  # 英文
-                dominant_emotion_cn=emotion_cn,  # 中文
-                dominant_emotion_count=1,
-                emotion_counts={emotion_cn: 1},
-                positive_count=1 if is_positive else 0,
-                negative_count=1 if is_negative else 0,
-                neutral_count=1 if not is_positive and not is_negative else 0,
-                positive_rate=1.0 if is_positive else 0.0,
-                negative_rate=1.0 if is_negative else 0.0,
-                avg_confidence=round(confidence, 2),
-                updated_at=datetime.now()
+                total_predictions=total,
+                emotion_counts=counts,
             )
             db.session.add(summary)
-        
-        # 2. 创建心理健康评估记录（基于情绪统计）
-        # 使用与数据分析界面相同的算法
-        if summary:
-            # 计算积极和消极情绪占比（百分比）
-            positive_rate_percent = summary.positive_rate * 100  # 转换为百分比
-            negative_rate_percent = summary.negative_rate * 100
-            
-            # 计算情绪稳定性（简化版，因为没有历史波动数据）
-            # 如果有足够数据，稳定性基于情绪分布的均衡度
-            if summary.total_predictions >= 3:
-                # 标准差的简化计算：基于情绪分布的离散程度
-                emotion_counts = summary.emotion_counts or {}
-                if emotion_counts:
-                    counts = list(emotion_counts.values())
-                    mean = sum(counts) / len(counts)
-                    variance = sum((x - mean) ** 2 for x in counts) / len(counts)
-                    std_dev = variance ** 0.5
-                    # 标准差越小，稳定性越高
-                    stability = max(0, min(100, 100 - std_dev * 20))
-                else:
-                    stability = 50
-            else:
-                # 数据不足，默认中等稳定性
-                stability = 50
-            
-            # 使用与前端相同的公式计算健康得分
-            # 总分 = 积极占比 × 0.4 + (100 - 消极占比) × 0.3 + 稳定性 × 0.3
-            health_score = int(
-                positive_rate_percent * 0.4 + 
-                (100 - negative_rate_percent) * 0.3 + 
-                stability * 0.3
-            )
-            
-            # 确保在0-100范围内
-            health_score = max(0, min(100, health_score))
-            
-            # 确定评级和建议（与前端一致）
-            if health_score >= 85:
-                risk_level = 'excellent'
-                risk_level_cn = '优秀'
-                advice = '您的情绪状态非常健康！保持积极乐观的心态，继续加油！'
-            elif health_score >= 70:
-                risk_level = 'good'
-                risk_level_cn = '良好'
-                advice = '您的情绪状态良好，继续保持规律作息和适度运动。'
-            elif health_score >= 55:
-                risk_level = 'normal'
-                risk_level_cn = '一般'
-                advice = '建议多参与社交活动，尝试放松技巧，如冥想、瑜伽等。'
-            else:
-                risk_level = 'need-attention'
-                risk_level_cn = '需要关注'
-                advice = '您的情绪波动较大，建议咨询专业心理咨询师，及时调整心态。'
-            
-            # 生成详细建议列表
-            suggestions = [advice]
-            
-            # 保存评估记录
-            assessment = HealthAssessment(
-                username=username,
-                assessment_date=today,
-                health_score=health_score,
-                risk_level=risk_level,
-                risk_level_cn=risk_level_cn,
-                emotion_stability=stability / 100.0,  # 转换为0-1的小数
-                positive_rate=summary.positive_rate,
-                negative_rate=summary.negative_rate,
-                suggestions=suggestions,
-                based_on_days=1,
-                created_at=datetime.now(),
-                updated_at=datetime.now()
-            )
+
+        # 主导情绪（中英文）
+        dominant_emotion_cn = max(counts, key=counts.get)
+        summary.dominant_emotion_cn = dominant_emotion_cn
+        summary.dominant_emotion = EMOTION_CN_TO_EN.get(dominant_emotion_cn, dominant_emotion_cn)
+        summary.dominant_emotion_count = counts[dominant_emotion_cn]
+
+        # 积极/消极/中性计数与占比（百分数）
+        positive_count = sum(counts.get(EMOTION_EN_TO_CN[e], 0) for e in POSITIVE_EMOTIONS)
+        negative_count = sum(counts.get(EMOTION_EN_TO_CN[e], 0) for e in NEGATIVE_EMOTIONS)
+        neutral_count = counts.get(EMOTION_EN_TO_CN['surprised'], 0)
+        summary.positive_count = positive_count
+        summary.negative_count = negative_count
+        summary.neutral_count = neutral_count
+        summary.positive_rate = round(positive_count / total * 100, 2) if total else 0.0
+        summary.negative_rate = round(negative_count / total * 100, 2) if total else 0.0
+
+        # 平均置信度（增量平均）
+        if total > 1 and summary.avg_confidence:
+            summary.avg_confidence = round((summary.avg_confidence * (total - 1) + confidence) / total, 2)
+        else:
+            summary.avg_confidence = round(confidence, 2)
+
+        # 情绪稳定性：按效价加权分布的标准差（比例分布，不随识别次数漂移）
+        # 与前端 emotionMap 口径一致：1=最消极 ... 7=最积极
+        probs = {
+            EMOTION_CN_TO_EN.get(k, k): v / total
+            for k, v in counts.items() if total
+        }
+        mean_v = sum(p * EMOTION_VALENCE.get(e, 5) for e, p in probs.items())
+        variance_v = sum(p * (EMOTION_VALENCE.get(e, 5) - mean_v) ** 2 for e, p in probs.items())
+        std_v = variance_v ** 0.5
+        stability = max(0, min(100, 100 - std_v * 20))
+        summary.stability_stddev = round(std_v, 2)
+        summary.stability_level = '稳定' if stability >= 70 else ('一般' if stability >= 40 else '波动较大')
+        summary.updated_at = datetime.now()
+
+        # 2. 心理健康评估（按 用户+日期 upsert，一天只有一条，两种字段方案合一）
+        health_score = int(round(
+            summary.positive_rate * 0.4 + (100 - summary.negative_rate) * 0.3 + stability * 0.3
+        ))
+        health_score = max(0, min(100, health_score))
+        risk_level, risk_level_cn, score_advice = health_score_to_level(health_score)
+        alert_title, alert_type, alert_description, alert_suggestions = positive_rate_to_alert(
+            summary.positive_rate, summary.negative_rate
+        )
+        suggestions = [score_advice] + alert_suggestions
+
+        assessment = HealthAssessment.query.filter_by(
+            username=username,
+            assessment_date=today
+        ).first()
+        if assessment is None:
+            assessment = HealthAssessment(username=username, assessment_date=today)
             db.session.add(assessment)
-        
+        assessment.health_score = health_score
+        assessment.risk_level = risk_level
+        assessment.risk_level_cn = risk_level_cn
+        assessment.alert_title = alert_title
+        assessment.alert_type = alert_type
+        assessment.alert_description = alert_description
+        assessment.suggestions = suggestions
+        assessment.positive_rate = summary.positive_rate
+        assessment.negative_rate = summary.negative_rate
+        assessment.emotion_stability = round(stability / 100.0, 4)
+        assessment.stability_level = summary.stability_level
+        assessment.based_on_days = 1
+        assessment.updated_at = datetime.now()
+
         db.session.commit()
-        logger.info(f"✅ 已更新健康数据表: {username}, {emotion_cn}")
-        
+        logger.info(f"✅ 已更新健康数据表: {username}, {cn} (得分 {health_score})")
+
     except Exception as e:
         logger.error(f"更新健康数据表失败: {e}")
         db.session.rollback()
@@ -603,23 +653,20 @@ def predict_emotion():
     """
     try:
         data = request.json
-        
+
         if not data or 'image' not in data:
             return jsonify({'error': '缺少图像数据'}), 400
-        
+
         # 获取模型类型
         model_name = data.get('model', 'cnn').lower()
         if model_name not in MODEL_PATHS:
             return jsonify({'error': f'不支持的模型: {model_name}'}), 400
-        
+
         # 加载模型(如果还未加载)
-        if model_name not in models:
-            model_entry = load_model(model_name)
-            if model_entry is None:
-                return jsonify({'error': f'模型加载失败: {model_name}'}), 500
-            models[model_name] = model_entry
-        model_entry = models[model_name]
-        
+        model_entry = _get_model_entry(model_name)
+        if model_entry is None:
+            return jsonify({'error': f'模型加载失败: {model_name}'}), 500
+
         # 解码图像
         image_data = data['image']
         if ',' in image_data:
@@ -636,88 +683,37 @@ def predict_emotion():
         # 解码并打开图像
         image_bytes = base64.b64decode(payload)
         image = Image.open(io.BytesIO(image_bytes))
-        original_image = image.copy()
-        
-        # 是否进行人脸检测与对齐：优先 MTCNN，对齐失败则回退 Haar
-        if data.get('detect_face', True):
-            # 用于前端显示：只检测和裁剪，不旋转对齐（避免黑边）
-            display_face = detect_face_for_display(image)
-            
-            # 用于模型预测：完整的检测和对齐流程（可能有黑边，但模型需要）
-            aligned = detect_and_align_mtcnn(image)
-            if aligned is not None:
-                image = aligned
-            else:
-                image = detect_face(image)
-        else:
-            display_face = image.copy()
-        
-        # 保存用于前端显示的干净人脸图（无黑边）
-        aligned_face = display_face.copy()
-        
-        # 评估人脸质量
-        quality_start = time.time()
-        quality_result = assess_face_quality(aligned_face)
-        quality_time = time.time() - quality_start
-        logger.info(f"🔍 人脸质量评估: {quality_result['quality_score']:.1f}分 (耗时: {quality_time:.3f}秒)")
-        
+
+        # 完整预测管线（检测/对齐/质量/预处理/推理）
+        prediction = _predict_face_emotion(
+            image, model_name, model_entry,
+            detect_face=data.get('detect_face', True)
+        )
+        confidence = prediction['confidence']
+        aligned_face = prediction['aligned_face']
+
+        quality_result = prediction['quality']
+        logger.info(f"🔍 人脸质量评估: {quality_result['quality_score']:.1f}分")
+
         # 如果质量过低,给出警告
         if not quality_result['is_acceptable']:
             logger.warning(f"⚠️  人脸质量较低: {', '.join(quality_result['warnings'])}")
-        
-        # 根据模型类型选择预处理模式
-        if model_name == 'vgg':
-            preprocess_mode = 'vgg'
-        elif model_name in ('se81', 'se83'):
-            preprocess_mode = 'efficientnet'
-        else:
-            preprocess_mode = 'simple'
-        
-        # 预处理图像（根据模型输入形状动态处理）
-        # 修复：CNN使用96×96×1，SE和VGG模型使用224×224×3
-        preprocess_start = time.time()
-        fallback = (96, 96, 1) if model_name in ("cnn",) else (224, 224, 3)
-        processed_image = preprocess_for_model(
-            image,
-            model=model_entry['obj'] if model_entry['type'] == 'keras' else None,
-            loaded=model_entry['obj'] if model_entry['type'] == 'saved' else None,
-            fallback=model_entry.get('input_shape') or fallback,
-            mode=preprocess_mode
-        )
-        if processed_image is None:
-            return jsonify({'error': '图像预处理失败'}), 500
-        preprocess_time = time.time() - preprocess_start
-        logger.info(f"🔧 预处理完成 (模式: {preprocess_mode}, 耗时: {preprocess_time:.3f}秒)")
 
-        # 进行预测（兼容 Keras 与 SavedModel）
-        inference_start = time.time()
-        predictions = run_inference(model_entry, processed_image)
-        predicted_class = np.argmax(predictions[0])
-        confidence = float(predictions[0][predicted_class])
-        inference_time = time.time() - inference_start
-        logger.info(f"🤖 推理完成: {EMOTION_LABELS[predicted_class]} ({confidence:.2%}, 耗时: {inference_time:.3f}秒)")
-        # 展示对齐后的人脸图（即模型实际预测的输入图）
-        preproc_data_url = _pil_to_data_url(aligned_face)
-        
+        preproc_data_url = prediction['face_image_data_url']
+
         # 构建返回结果
         quality_level, quality_color = get_quality_level(quality_result['quality_score'])
         result = {
             'success': True,
-            'emotion': EMOTION_LABELS[predicted_class],
-            'emotion_cn': EMOTION_LABELS_CN[predicted_class],
+            'emotion': prediction['emotion'],
+            'emotion_cn': prediction['emotion_cn'],
             'confidence': confidence,
-            'probabilities': {
-                EMOTION_LABELS[i]: float(predictions[0][i])
-                for i in range(len(EMOTION_LABELS))
-            },
-            'probabilities_cn': {
-                EMOTION_LABELS_CN[i]: float(predictions[0][i])
-                for i in range(len(EMOTION_LABELS))
-            },
+            'probabilities': prediction['probabilities'],
+            'probabilities_cn': prediction['probabilities_cn'],
             'model_used': model_name.upper(),
             'timestamp': datetime.now().isoformat(),
             'preprocessed_image': preproc_data_url,
-            # 新增: 人脸质量信息
+            # 人脸质量信息
             'face_quality': {
                 'score': quality_result['quality_score'],
                 'level': quality_level,
@@ -728,45 +724,36 @@ def predict_emotion():
                 'warnings': quality_result['warnings'],
                 'is_acceptable': quality_result['is_acceptable']
             },
-            # 新增: 性能信息
-            'performance': {
-                'quality_assessment_time': round(quality_time, 3),
-                'preprocessing_time': round(preprocess_time, 3),
-                'inference_time': round(inference_time, 3),
-                'total_time': round(quality_time + preprocess_time + inference_time, 3)
-            }
+            # 性能信息
+            'performance': prediction['timings']
         }
-        
+
         logger.info(f"✅ 预测成功: {result['emotion_cn']} (置信度: {confidence:.2%}, 总耗时: {result['performance']['total_time']:.3f}秒)")
 
         # 尝试将预测记录保存到数据库（轻量级：只存文件路径）
         try:
             username_for_history = request.current_user.get('username')
-            
-            # 保存图片文件到服务器（可选：如果需要持久化）
-            original_image_path = None
             preprocessed_image_path = None
-            
+
             if username_for_history:  # 只为登录用户保存文件
                 try:
-                    # 确保 uploads/predictions 目录存在
                     safe_user = _safe_user_dirname(username_for_history)
                     predictions_dir = os.path.join(str(UPLOAD_FOLDER), 'predictions', safe_user)
                     os.makedirs(predictions_dir, exist_ok=True)
-                    
+
                     # 生成唯一文件名
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-                    
+
                     # 保存预处理后的人脸图片（缩略图）
                     preprocessed_filename = f"face_{timestamp}.jpg"
                     preprocessed_path = os.path.join(predictions_dir, preprocessed_filename)
                     aligned_face.save(preprocessed_path, quality=85)
                     preprocessed_image_path = _to_upload_relpath(preprocessed_path)
-                    
+
                     logger.info(f"💾 已保存图片到: {preprocessed_path}")
                 except Exception as save_error:
                     logger.warning(f"保存图片文件失败: {save_error}")
-            
+
             # 保存轻量级元数据到数据库
             history = PredictionHistory(
                 emotion=result['emotion'],
@@ -774,7 +761,6 @@ def predict_emotion():
                 confidence=confidence,
                 model_used=model_name.upper(),
                 username=username_for_history,
-                original_image_path=original_image_path,
                 preprocessed_image_path=preprocessed_image_path,
                 probabilities={
                     'en': result['probabilities'],
@@ -785,21 +771,20 @@ def predict_emotion():
             db.session.add(history)
             db.session.commit()
             result['history_id'] = history.id
-            
+
             # 更新健康数据表（情绪统计、健康评估）
             if username_for_history:
                 update_health_tables(
                     username=username_for_history,
                     emotion=result['emotion'],
                     emotion_cn=result['emotion_cn'],
-                    confidence=confidence,
-                    probabilities_cn=result['probabilities_cn']
+                    confidence=confidence
                 )
         except Exception as e:
             logger.warning(f"保存预测历史到数据库失败: {e}")
 
         return jsonify(result)
-        
+
     except Exception as e:
         logger.error(f"预测失败: {str(e)}")
         return jsonify({'error': f'预测失败: {str(e)}'}), 500
@@ -810,100 +795,91 @@ def batch_predict():
     """批量预测接口"""
     try:
         data = request.json
-        
+
         if not data or 'images' not in data:
             return jsonify({'error': '缺少图像数据'}), 400
-        
+
         images = data['images']
+        if not isinstance(images, list) or not images:
+            return jsonify({'error': 'images 需为非空数组'}), 400
+        if len(images) > 20:
+            return jsonify({'error': '单次批量最多 20 张图片'}), 400
+
         model_name = data.get('model', 'cnn').lower()
-        
+
         # 加载模型
-        if model_name not in models:
-            model_entry = load_model(model_name)
-            if model_entry is None:
-                return jsonify({'error': f'模型加载失败: {model_name}'}), 500
-            models[model_name] = model_entry
-        
+        model_entry = _get_model_entry(model_name)
+        if model_entry is None:
+            return jsonify({'error': f'模型加载失败: {model_name}'}), 500
+
+        username_for_history = request.current_user.get('username')
+        detect_face = data.get('detect_face', True)
         results = []
         for idx, img_data in enumerate(images):
             try:
-                # 预处理
                 if ',' in img_data:
                     img_data = img_data.split(',')[1]
+
+                # 与单图预测一致的图像校验
+                ok, err = validate_base64_image(img_data)
+                if not ok:
+                    results.append({'index': idx, 'error': f'图像校验失败: {err}'})
+                    continue
+
                 image_bytes = base64.b64decode(img_data)
                 image = Image.open(io.BytesIO(image_bytes))
-                original_image = image.copy()
-                
-                if data.get('detect_face', True):
-                    # 用于前端显示：只检测和裁剪，不旋转对齐（避免黑边）
-                    display_face = detect_face_for_display(image)
-                    
-                    # 用于模型预测：完整的检测和对齐流程（可能有黑边，但模型需要）
-                    aligned = detect_and_align_mtcnn(image)
-                    if aligned is not None:
-                        image = aligned
-                    else:
-                        image = detect_face(image)
-                else:
-                    display_face = image.copy()
-                
-                # 保存用于前端显示的干净人脸图（无黑边）
-                aligned_face = display_face.copy()
-                
-                # 根据模型类型选择预处理模式
-                if model_name == 'vgg':
-                    preprocess_mode = 'vgg'
-                elif model_name in ('se81', 'se83'):
-                    preprocess_mode = 'efficientnet'
-                else:
-                    preprocess_mode = 'simple'
-                
-                model_entry = models[model_name]
-                # 修复：CNN使用96×96×1，SE和VGG模型使用224×224×3
-                fallback = (96, 96, 1) if model_name in ("cnn",) else (224, 224, 3)
-                processed_image = preprocess_for_model(
-                    image,
-                    model=model_entry['obj'] if model_entry['type'] == 'keras' else None,
-                    loaded=model_entry['obj'] if model_entry['type'] == 'saved' else None,
-                    fallback=model_entry.get('input_shape') or fallback,
-                    mode=preprocess_mode
-                )
-                
-                # 预测
-                predictions = run_inference(models[model_name], processed_image)
-                predicted_class = np.argmax(predictions[0])
-                # 展示对齐后的人脸图（即模型实际预测的输入图）
-                preproc_data_url = _pil_to_data_url(aligned_face)
-                
+
+                prediction = _predict_face_emotion(image, model_name, model_entry, detect_face=detect_face)
+                confidence = prediction['confidence']
+                aligned_face = prediction['aligned_face']
+                preproc_data_url = prediction['face_image_data_url']
+
                 results.append({
                     'index': idx,
-                    'emotion': EMOTION_LABELS[predicted_class],
-                    'emotion_cn': EMOTION_LABELS_CN[predicted_class],
-                    'confidence': float(predictions[0][predicted_class]),
+                    'emotion': prediction['emotion'],
+                    'emotion_cn': prediction['emotion_cn'],
+                    'confidence': confidence,
                     'preprocessed_image': preproc_data_url
                 })
-                # 保存每条记录到数据库
+                # 保存每条记录到数据库（与单图预测一致：存文件 + 更新健康表）
                 try:
-                    username_for_history = None
-                    auth_header = request.headers.get('Authorization')
-                    if auth_header and ' ' in auth_header:
-                        token = auth_header.split(' ')[1]
-                        payload = verify_token(token)
-                        if payload and payload.get('user_id'):
-                            u = get_user_by_id(payload['user_id'])
-                            if u:
-                                username_for_history = u.get('username')
+                    preprocessed_image_path = None
+                    if username_for_history:
+                        try:
+                            safe_user = _safe_user_dirname(username_for_history)
+                            predictions_dir = os.path.join(str(UPLOAD_FOLDER), 'predictions', safe_user)
+                            os.makedirs(predictions_dir, exist_ok=True)
+                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                            preprocessed_path = os.path.join(predictions_dir, f"face_{timestamp}.jpg")
+                            aligned_face.save(preprocessed_path, quality=85)
+                            preprocessed_image_path = _to_upload_relpath(preprocessed_path)
+                        except Exception as save_error:
+                            logger.warning(f"批量预测保存图片失败: {save_error}")
+
                     history = PredictionHistory(
-                        emotion=EMOTION_LABELS[predicted_class],
-                        emotion_cn=EMOTION_LABELS_CN[predicted_class],
-                        confidence=float(predictions[0][predicted_class]),
+                        emotion=prediction['emotion'],
+                        emotion_cn=prediction['emotion_cn'],
+                        confidence=confidence,
                         model_used=model_name.upper(),
-                        image_path=None,
-                        username=username_for_history
+                        username=username_for_history,
+                        preprocessed_image_path=preprocessed_image_path,
+                        probabilities={
+                            'en': prediction['probabilities'],
+                            'cn': prediction['probabilities_cn']
+                        },
+                        input_type='image'
                     )
                     db.session.add(history)
                     db.session.commit()
                     results[-1]['history_id'] = history.id
+
+                    if username_for_history:
+                        update_health_tables(
+                            username=username_for_history,
+                            emotion=prediction['emotion'],
+                            emotion_cn=prediction['emotion_cn'],
+                            confidence=confidence
+                        )
                 except Exception as e:
                     logger.warning(f"批量保存预测历史失败: {e}")
             except Exception as e:
@@ -911,13 +887,13 @@ def batch_predict():
                     'index': idx,
                     'error': str(e)
                 })
-        
+
         return jsonify({
             'success': True,
             'results': results,
             'model_used': model_name.upper()
         })
-        
+
     except Exception as e:
         logger.error(f"批量预测失败: {str(e)}")
         return jsonify({'error': f'批量预测失败: {str(e)}'}), 500
@@ -1053,10 +1029,10 @@ def upload_video():
             logger.warning(f"视频上传过大: {content_length} bytes")
             return jsonify({'error': '上传视频过大'}), 413
 
-        # 保存视频文件
+        # 保存视频文件（video_id 带用户前缀，用于分析接口校验属主，防止越权分析他人视频）
         filename = secure_filename(file.filename)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        video_id = f"video_{timestamp}_{filename}"
+        video_id = f"u{request.current_user.get('id')}_{timestamp}_{filename}"
 
         video_data = file.read()
         # 双重保护：再检查一次实际读取字节数
@@ -1065,7 +1041,10 @@ def upload_video():
             return jsonify({'error': '上传视频过大'}), 413
 
         video_path = video_processor.save_video(video_data, video_id)
-        
+
+        # 顺带清理过期视频（默认保留 7 天），避免 uploads 无限膨胀
+        video_processor.cleanup_old_videos(days=7)
+
         # 获取视频信息
         video_info = video_processor.get_video_info(video_path)
         
@@ -1121,37 +1100,53 @@ def analyze_video():
         safe_id = Path(str(video_id)).name
         if safe_id != video_id or '..' in video_id or '/' in str(video_id) or '\\' in str(video_id):
             return jsonify({'error': '非法的 video_id'}), 400
+        video_id = safe_id
         video_path = str((Path(video_processor.upload_folder) / safe_id).resolve())
         upload_root = Path(video_processor.upload_folder).resolve()
         try:
             Path(video_path).relative_to(upload_root)
         except ValueError:
             return jsonify({'error': '非法的 video_id'}), 400
-        
-        if not os.path.exists(video_path):
-            return jsonify({'error': f'视频文件不存在: {video_id}'}), 404
-        
-        video_id = safe_id
-        
-        # 获取参数
+
+        # 属主校验：u<id>_ 前缀的视频仅属主（或管理员）可分析；旧格式文件保持兼容
+        owner_match = re.match(r'^u(\d+)_', video_id)
+        if owner_match:
+            current_uid = str(request.current_user.get('id'))
+            if (request.current_user.get('role') != 'admin'
+                    and current_uid != owner_match.group(1)):
+                return jsonify({'error': '无权分析该视频'}), 403
+
+        # 参数校验（用户可控，必须先于耗时操作，防止除零/资源耗尽）
         model_name = data.get('model', 'cnn').lower()
-        interval = float(data.get('interval', 5.0))
-        max_frames = int(data.get('max_frames', 100))
+        try:
+            interval = float(data.get('interval', 5.0))
+            max_frames = int(data.get('max_frames', 100))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'interval / max_frames 参数类型非法'}), 400
+        if not (0.1 <= interval <= 60):
+            return jsonify({'error': 'interval 参数需在 0.1-60 秒之间'}), 400
+        if not (1 <= max_frames <= 500):
+            return jsonify({'error': 'max_frames 参数需在 1-500 之间'}), 400
         detect_face = data.get('detect_face', True)
-        
+
         if model_name not in MODEL_PATHS:
             return jsonify({'error': f'不支持的模型: {model_name}'}), 400
-        
+
+        if not os.path.exists(video_path):
+            return jsonify({'error': f'视频文件不存在: {video_id}'}), 404
+
         # 加载模型
-        if model_name not in models:
-            model_entry = load_model(model_name)
-            if model_entry is None:
-                return jsonify({'error': f'模型加载失败: {model_name}'}), 500
-            models[model_name] = model_entry
-        
-        model_entry = models[model_name]
-        
+        model_entry = _get_model_entry(model_name)
+        if model_entry is None:
+            return jsonify({'error': f'模型加载失败: {model_name}'}), 500
+
         logger.info(f"🎬 开始分析视频: {video_id}, 模型={model_name}, 间隔={interval}秒")
+
+        # 视频真实时长（供分析结果存库；读取失败不影响主流程）
+        try:
+            video_duration = video_processor.get_video_info(video_path).get('duration', 0)
+        except Exception:
+            video_duration = 0
         
         # 提取视频帧
         extract_start = time.time()
@@ -1160,21 +1155,9 @@ def analyze_video():
         
         logger.info(f"✅ 提取完成: {len(frames)} 帧 (耗时: {extract_time:.2f}秒)")
         
-        # 🔑 提前获取当前用户信息（避免在循环中重复获取）
-        current_username = None
-        try:
-            auth_header = request.headers.get('Authorization')
-            if auth_header and auth_header.startswith('Bearer '):
-                token = auth_header.split(' ')[1]
-                payload = verify_token(token)
-                if payload:
-                    user_id = payload.get('user_id')
-                    user = get_user_by_id(user_id)
-                    if user:
-                        current_username = user.get('username')
-                        logger.info(f"👤 检测到登录用户: {current_username}")
-        except Exception as e:
-            logger.warning(f"获取用户信息失败: {e}")
+        # 当前用户信息（token_required 装饰器已解析，直接取用）
+        current_username = request.current_user.get('username')
+        logger.info(f"👤 当前用户: {current_username}")
         
         # 对每一帧进行情绪识别
         analysis_results = []
@@ -1184,105 +1167,56 @@ def analyze_video():
             try:
                 # 转换为PIL Image
                 image = Image.fromarray(frame_rgb)
-                
-                # 人脸检测
-                if detect_face:
-                    display_face = detect_face_for_display(image)
-                    aligned = detect_and_align_mtcnn(image)
-                    if aligned is not None:
-                        image = aligned
-                    else:
-                        image = detect_face(image)
-                else:
-                    display_face = image.copy()
-                
-                aligned_face = display_face.copy()
-                
-                # 选择预处理模式
-                if model_name == 'vgg':
-                    preprocess_mode = 'vgg'
-                elif model_name in ('se81', 'se83'):
-                    preprocess_mode = 'efficientnet'
-                else:
-                    preprocess_mode = 'simple'
-                
-                # 预处理
-                fallback = (96, 96, 1) if model_name == 'cnn' else (224, 224, 3)
-                processed_image = preprocess_for_model(
-                    image,
-                    model=model_entry['obj'] if model_entry['type'] == 'keras' else None,
-                    loaded=model_entry['obj'] if model_entry['type'] == 'saved' else None,
-                    fallback=model_entry.get('input_shape') or fallback,
-                    mode=preprocess_mode
-                )
-                
-                if processed_image is None:
-                    logger.warning(f"⚠️  帧 {idx+1} 预处理失败，跳过")
-                    continue
-                
-                # 进行预测
-                predictions = run_inference(model_entry, processed_image)
-                predicted_class = np.argmax(predictions[0])
-                confidence = float(predictions[0][predicted_class])
-                
-                # 生成对齐后的人脸图base64
-                aligned_base64 = _pil_to_data_url(aligned_face)
-                
+
+                # 共享预测管线（检测/对齐/预处理/推理）
+                prediction = _predict_face_emotion(image, model_name, model_entry, detect_face=detect_face)
+                confidence = prediction['confidence']
+                aligned_face = prediction['aligned_face']
+
                 # 格式化时间
                 minutes = int(timestamp // 60)
                 seconds = int(timestamp % 60)
                 time_formatted = f"{minutes:02d}:{seconds:02d}"
-                
+
                 result = {
                     'frame_index': idx,
                     'timestamp': timestamp,
                     'time_formatted': time_formatted,
-                    'emotion': EMOTION_LABELS[predicted_class],
-                    'emotion_cn': EMOTION_LABELS_CN[predicted_class],
+                    'emotion': prediction['emotion'],
+                    'emotion_cn': prediction['emotion_cn'],
                     'confidence': confidence,
                     'original_frame': frame_base64,
-                    'face_image': aligned_base64,
-                    'probabilities': {
-                        EMOTION_LABELS[i]: float(predictions[0][i])
-                        for i in range(len(EMOTION_LABELS))
-                    },
-                    'probabilities_cn': {
-                        EMOTION_LABELS_CN[i]: float(predictions[0][i])
-                        for i in range(len(EMOTION_LABELS))
-                    }
+                    'face_image': prediction['face_image_data_url'],
+                    'probabilities': prediction['probabilities'],
+                    'probabilities_cn': prediction['probabilities_cn']
                 }
-                
+
                 analysis_results.append(result)
-                logger.info(f"  ✓ 帧 {idx+1}/{len(frames)}: {time_formatted} - {EMOTION_LABELS_CN[predicted_class]} ({confidence:.2%})")
-                
+                logger.info(f"  ✓ 帧 {idx+1}/{len(frames)}: {time_formatted} - {prediction['emotion_cn']} ({confidence:.2%})")
+
                 # 💾 保存视频帧到数据库
                 try:
-                    # 保存视频帧图片到文件系统
-                    frame_filename = None
                     frame_path = None
-                    if aligned_face:
+                    if current_username:
                         timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S%f')
                         username_folder = _safe_user_dirname(current_username)
                         frame_dir = os.path.join(str(UPLOAD_FOLDER), 'video_frames', username_folder)
                         os.makedirs(frame_dir, exist_ok=True)
-                        
-                        frame_filename = f"frame_{timestamp_str}_idx{idx}.jpg"
-                        frame_path = os.path.join(frame_dir, frame_filename)
-                        
+
+                        frame_path = os.path.join(frame_dir, f"frame_{timestamp_str}_idx{idx}.jpg")
                         # 保存人脸图片
                         aligned_face.save(frame_path, 'JPEG', quality=85)
-                        logger.info(f"💾 保存视频帧图片: {frame_path}")
                         frame_path = _to_upload_relpath(frame_path)
-                    
+
                     # 保存到数据库（记录用户名）
                     history = PredictionHistory(
-                        emotion=EMOTION_LABELS[predicted_class],
-                        emotion_cn=EMOTION_LABELS_CN[predicted_class],
+                        emotion=prediction['emotion'],
+                        emotion_cn=prediction['emotion_cn'],
                         confidence=confidence,
                         model_used=model_name.upper(),
-                        username=current_username,  # 保存用户名（可能是 None）
+                        username=current_username,
                         preprocessed_image_path=frame_path,
-                        video_path=video_path,
+                        video_path=video_id,
                         frame_timestamp=timestamp,
                         frame_index=idx,
                         probabilities=result['probabilities'],
@@ -1290,70 +1224,63 @@ def analyze_video():
                     )
                     db.session.add(history)
                     db.session.commit()
-                    
-                    username_display = current_username or 'anonymous'
-                    logger.info(f"📝 保存视频帧历史记录: ID={history.id}, 用户={username_display}, 帧={idx}")
-                    
+
                     # 🔄 为每一帧更新情绪汇总表（如果有登录用户）
                     if current_username:
                         try:
                             update_health_tables(
                                 username=current_username,
-                                emotion=EMOTION_LABELS[predicted_class],
-                                emotion_cn=EMOTION_LABELS_CN[predicted_class],
-                                confidence=confidence,
-                                probabilities_cn=result['probabilities_cn']
+                                emotion=prediction['emotion'],
+                                emotion_cn=prediction['emotion_cn'],
+                                confidence=confidence
                             )
-                            logger.debug(f"✅ 已更新帧{idx}的情绪汇总")
                         except Exception as update_error:
                             logger.warning(f"⚠️  更新帧{idx}的情绪汇总失败: {update_error}")
-                
+
                 except Exception as save_error:
                     logger.error(f"⚠️  保存视频帧历史记录失败: {save_error}")
                     db.session.rollback()  # 回滚失败的事务
                     # 不中断分析流程
-            
+
             except Exception as e:
                 logger.error(f"❌ 帧 {idx+1} 分析失败: {str(e)}")
                 continue
-        
+
         predict_time = time.time() - predict_start
-        
+
         # 创建情绪时间轴
         timeline_data = create_emotion_timeline(analysis_results)
-        
+
         # 计算统计数据
         statistics = calculate_emotion_statistics(analysis_results)
-        
+
         logger.info(f"✅ 视频分析完成: {len(analysis_results)} 帧 (耗时: {predict_time:.2f}秒)")
         logger.info(f"📊 主导情绪: {statistics.get('dominant_emotion', 'N/A')}")
-        logger.info(f"🔄 情绪流: {timeline_data.get('emotion_flow', 'N/A')}")
-        
-        # 💾 保存视频分析结果到数据库
+
+        # 💾 保存视频分析结果到数据库（按 用户+video_id upsert，同一视频可重复分析）
         if current_username and analysis_results:
             try:
-                # 保存视频分析结果
-                video_result = VideoAnalysisResult(
+                video_result = VideoAnalysisResult.query.filter_by(
                     username=current_username,
-                    video_id=video_id,
-                    total_frames=len(analysis_results),
-                    duration_seconds=analysis_results[-1]['timestamp'] if analysis_results else 0,
-                    dominant_emotion=statistics.get('dominant_emotion'),
-                    dominant_emotion_cn=statistics.get('dominant_emotion_cn'),
-                    avg_confidence=statistics.get('avg_confidence'),
-                    emotion_distribution=statistics.get('emotion_counts'),
-                    stability_level=statistics.get('emotion_stability', 'unknown'),
-                    stability_score=statistics.get('stability_score', 0)
-                )
-                db.session.add(video_result)
+                    video_id=video_id
+                ).first()
+                if video_result is None:
+                    video_result = VideoAnalysisResult(username=current_username, video_id=video_id)
+                    db.session.add(video_result)
+                video_result.total_frames = len(analysis_results)
+                video_result.duration_seconds = video_duration or (analysis_results[-1]['timestamp'] if analysis_results else 0)
+                video_result.dominant_emotion = statistics.get('dominant_emotion')
+                video_result.dominant_emotion_cn = statistics.get('dominant_emotion_cn')
+                video_result.avg_confidence = statistics.get('avg_confidence')
+                video_result.emotion_distribution = statistics.get('emotion_counts')
+                video_result.stability_level = statistics.get('emotion_stability', 'unknown')
+                video_result.stability_score = statistics.get('stability_score', 0)
                 db.session.commit()
                 logger.info(f"✅ 已保存视频分析结果: {video_id}")
-                logger.info(f"ℹ️  情绪汇总已在每一帧分析时实时更新")
-                
             except Exception as save_error:
                 logger.error(f"保存视频分析结果失败: {save_error}")
                 db.session.rollback()
-        
+
         response_data = {
             'success': True,
             'video_id': video_id,
@@ -1369,12 +1296,9 @@ def analyze_video():
                 'avg_time_per_frame': round(predict_time / len(analysis_results), 2) if analysis_results else 0
             }
         }
-        
-        logger.info(f"🔍 [DEBUG] 返回数据结构: success={response_data['success']}, video_id={response_data['video_id']}, total_frames={response_data['total_frames']}")
-        logger.info(f"🔍 [DEBUG] timeline 类型: {type(response_data['timeline'])}, 键: {list(response_data['timeline'].keys()) if isinstance(response_data['timeline'], dict) else 'N/A'}")
-        
+
         return jsonify(response_data)
-    
+
     except Exception as e:
         logger.error(f"❌ 视频分析失败: {str(e)}")
         return jsonify({'error': f'视频分析失败: {str(e)}'}), 500

@@ -5,9 +5,9 @@
 *.swo
 *~
 
-# Local developer workspace artifacts
-.vscode/
-.idea/
+# Local virtualenvs
+.venv/
+venv/
 
 # OS
 .DS_Store
@@ -20,7 +20,7 @@ __pycache__/
 *.pyd
 venv/
 .venv/
-env/
+/env/
 ENV/
 .pytest_cache/
 .mypy_cache/

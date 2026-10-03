@@ -7,9 +7,14 @@ from flask import Blueprint, request, jsonify, current_app
 from functools import wraps
 import jwt
 import hashlib
+import re
 import secrets
+import threading
 from datetime import datetime, timedelta
-import os
+
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from src.config.settings import JWT_SECRET_KEY
 
 # 尝试导入数据库模型（可选）
 try:
@@ -20,11 +25,13 @@ except Exception:
 # 创建认证蓝图
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
-# JWT配置
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+# JWT配置（密钥统一由 settings.py 管理）
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 REFRESH_TOKEN_EXPIRATION_DAYS = 7
+
+# 旧版无盐 SHA-256 哈希的格式（64 位十六进制），用于登录时识别并升级
+_LEGACY_SHA256_RE = re.compile(r'^[0-9a-f]{64}$')
 
 # 模拟用户数据库（实际项目中应使用真实数据库）
 USERS_DB = {
@@ -33,7 +40,7 @@ USERS_DB = {
         'id': 1,
         'username': 'admin',
         'email': 'admin@emotion-ai.com',
-        'password_hash': hashlib.sha256('admin123'.encode()).hexdigest(),
+        'password_hash': generate_password_hash('admin123'),
         'role': 'admin',
         'avatar': '',
         'created_at': '2025-01-01T00:00:00Z',
@@ -45,7 +52,7 @@ USERS_DB = {
         'id': 2,
         'username': 'test',
         'email': 'test@emotion-ai.com',
-        'password_hash': hashlib.sha256('test123'.encode()).hexdigest(),
+        'password_hash': generate_password_hash('test123'),
         'role': 'user',
         'avatar': '',
         'created_at': '2025-01-01T00:00:00Z',
@@ -57,14 +64,38 @@ USERS_DB = {
 
 # 模拟刷新token存储（实际项目中应使用Redis或数据库）
 REFRESH_TOKENS = {}
+_REFESH_TOKENS_LOCK = threading.Lock()
+
+
+def _purge_expired_refresh_tokens():
+    """清理过期的刷新令牌，防止内存字典无限增长。"""
+    now = datetime.utcnow()
+    with _REFESH_TOKENS_LOCK:
+        expired = [t for t, d in REFRESH_TOKENS.items() if now > d['expires_at']]
+        for t in expired:
+            REFRESH_TOKENS.pop(t, None)
+
 
 def hash_password(password):
-    """密码哈希"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """密码哈希：werkzeug pbkdf2（加盐），兼容校验旧版无盐 SHA-256。"""
+    return generate_password_hash(password)
+
 
 def verify_password(password, password_hash):
-    """验证密码"""
-    return hash_password(password) == password_hash
+    """验证密码。兼容历史遗留的无盐 SHA-256 哈希，命中后会话内可调用 upgrade_password_hash 迁移。"""
+    if not password_hash:
+        return False
+    if _LEGACY_SHA256_RE.match(password_hash):
+        return hashlib.sha256(password.encode()).hexdigest() == password_hash
+    try:
+        return check_password_hash(password_hash, password)
+    except Exception:
+        return False
+
+
+def is_legacy_password_hash(password_hash):
+    """判断是否为旧版无盐 SHA-256 哈希（需要升级）。"""
+    return bool(password_hash) and bool(_LEGACY_SHA256_RE.match(password_hash))
 
 def generate_tokens(user_id):
     """生成访问token和刷新token"""
@@ -76,17 +107,18 @@ def generate_tokens(user_id):
         'iat': datetime.utcnow()
     }
     access_token = jwt.encode(access_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    
+
     # 刷新token
     refresh_token = secrets.token_urlsafe(32)
-    
+
     # 存储刷新token
-    REFRESH_TOKENS[refresh_token] = {
-        'user_id': user_id,
-        'expires_at': datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRATION_DAYS),
-        'is_used': False
-    }
-    
+    with _REFESH_TOKENS_LOCK:
+        REFRESH_TOKENS[refresh_token] = {
+            'user_id': user_id,
+            'expires_at': datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRATION_DAYS),
+            'is_used': False
+        }
+
     return access_token, refresh_token
 
 def verify_token(token):
@@ -196,26 +228,26 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-        
+
         # 从请求头获取token
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
-            try:
-                token = auth_header.split(' ')[1]  # Bearer <token>
-            except IndexError:
+            parts = auth_header.split(' ', 1)
+            if len(parts) != 2 or parts[0] != 'Bearer':
                 return jsonify({'error': 'Invalid token format'}), 401
-        
+            token = parts[1]
+
         if not token:
             return jsonify({'error': 'Token is missing'}), 401
-        
+
         user = _user_dict_from_payload(verify_token(token))
         if not user:
             return jsonify({'error': 'Invalid token'}), 401
-        
+
         # 将用户信息添加到请求上下文
         request.current_user = user
         return f(*args, **kwargs)
-    
+
     return decorated
 
 
@@ -226,7 +258,7 @@ def token_required_or_query(f):
         token = None
         if 'Authorization' in request.headers:
             parts = request.headers['Authorization'].split(' ', 1)
-            if len(parts) == 2:
+            if len(parts) == 2 and parts[0] == 'Bearer':
                 token = parts[1]
         if not token:
             token = request.args.get('token')
@@ -358,11 +390,18 @@ def login():
         # 验证密码
         if not verify_password(password, user['password_hash']):
             return jsonify({'error': 'Invalid username or password'}), 401
-        
+
         # 检查用户状态
         if not user['is_active']:
             return jsonify({'error': 'Account is deactivated'}), 401
-        
+
+        # 旧版无盐 SHA-256 哈希 → 升级为加盐 pbkdf2 哈希
+        if is_legacy_password_hash(user['password_hash']):
+            new_hash = hash_password(password)
+            user['password_hash'] = new_hash
+            _sync_user_to_db(user, password_hash=new_hash)
+            _sync_user_to_memory(user, password_hash=new_hash)
+
         # 生成token
         access_token, refresh_token = generate_tokens(user['id'])
         
@@ -398,40 +437,43 @@ def logout():
 def refresh_token():
     """刷新访问token"""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         refresh_token = data.get('refreshToken')
-        
+
         if not refresh_token:
             return jsonify({'error': 'Refresh token is required'}), 400
-        
+
+        _purge_expired_refresh_tokens()
+
         # 验证刷新token
-        if refresh_token not in REFRESH_TOKENS:
-            return jsonify({'error': 'Invalid refresh token'}), 401
-        
-        token_data = REFRESH_TOKENS[refresh_token]
-        
-        # 检查token是否过期
-        if datetime.utcnow() > token_data['expires_at']:
-            del REFRESH_TOKENS[refresh_token]
-            return jsonify({'error': 'Refresh token expired'}), 401
-        
-        # 检查token是否已使用
-        if token_data['is_used']:
-            del REFRESH_TOKENS[refresh_token]
-            return jsonify({'error': 'Refresh token already used'}), 401
-        
-        # 标记token为已使用
-        token_data['is_used'] = True
-        
+        with _REFESH_TOKENS_LOCK:
+            token_data = REFRESH_TOKENS.get(refresh_token)
+
+            if token_data is None:
+                return jsonify({'error': 'Invalid refresh token'}), 401
+
+            # 检查token是否过期
+            if datetime.utcnow() > token_data['expires_at']:
+                REFRESH_TOKENS.pop(refresh_token, None)
+                return jsonify({'error': 'Refresh token expired'}), 401
+
+            # 检查token是否已使用
+            if token_data['is_used']:
+                REFRESH_TOKENS.pop(refresh_token, None)
+                return jsonify({'error': 'Refresh token already used'}), 401
+
+            # 标记token为已使用（防止并发复用）
+            token_data['is_used'] = True
+
         # 生成新的token
         user_id = token_data['user_id']
         access_token, new_refresh_token = generate_tokens(user_id)
-        
+
         return jsonify({
             'token': access_token,
             'refreshToken': new_refresh_token
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': f'Token refresh failed: {str(e)}'}), 500
 

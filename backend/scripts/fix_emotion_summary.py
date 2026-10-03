@@ -1,10 +1,16 @@
 """
-修复情绪汇总表的数据
+修复情绪汇总表的数据（危险操作：清空整表，需显式传入 --yes）
 清除旧的不一致数据，让用户重新进行情绪识别来生成正确的数据
 """
+import sys
 import _bootstrap  # noqa: F401
 from src.storage.database import db, UserEmotionSummary
 from src.api.app import app
+
+if '--yes' not in sys.argv:
+    print('⚠️  该脚本会清空 user_emotion_summary 全表。')
+    print('    确认执行请运行: python scripts/fix_emotion_summary.py --yes')
+    sys.exit(1)
 
 with app.app_context():
     try:

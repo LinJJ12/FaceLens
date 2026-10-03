@@ -214,7 +214,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Camera, VideoCamera, Reading } from '@element-plus/icons-vue'
@@ -383,6 +383,11 @@ function handleCameraClose() {
   }
   showCameraDialog.value = false
 }
+
+// 卸载页面时确保摄像头指示灯熄灭（对话框未关直接跳路由的场景）
+onUnmounted(() => {
+  handleCameraClose()
+})
 
 onMounted(() => {
   emotionStore.checkHealth()

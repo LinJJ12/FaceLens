@@ -6,6 +6,8 @@
 
 从模型训练到 Web 应用，覆盖情绪识别的完整链路
 
+[![CI](https://github.com/LinJJ12/FaceLens/actions/workflows/ci.yml/badge.svg)](https://github.com/LinJJ12/FaceLens/actions/workflows/ci.yml)
+[![Docker Publish](https://github.com/LinJJ12/FaceLens/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/LinJJ12/FaceLens/actions/workflows/docker-publish.yml)
 [![Python](https://img.shields.io/badge/Python-3.8-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.10-FF6F00?logo=tensorflow&logoColor=white)](https://www.tensorflow.org/)
 [![Flask](https://img.shields.io/badge/Flask-2.3-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
@@ -242,6 +244,24 @@ curl -X POST http://localhost:5000/api/predict \
 - 上传图片 / 视频仅保存在本地 `backend/data/`；请勿将含真实用户数据的数据库、日志或上传目录提交到公开仓库。
 - 公网或共享环境部署前，务必配置强随机 `JWT_SECRET_KEY`，并修改或禁用演示账号与弱口令。
 - 请勿在 Issue、截图或提交内容中粘贴个人身份信息、密钥或生产凭据。
+
+## 🧪 测试与 CI/CD
+
+后端测试不依赖 TensorFlow 与模型权重（缺失时自动注入桩模块并跳过模型用例）：
+
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest tests/ -v
+```
+
+GitHub Actions（`.github/workflows/`）提供：
+
+| 工作流 | 触发 | 内容 |
+|--------|------|------|
+| `CI` | push / PR 到 main | 后端 ruff + pytest（Python 3.8 / 3.10 矩阵）、前端构建（Node 18 / 20）、Docker 镜像构建验证 |
+| `Docker Publish` | push main / 打 `v*` 标签 | 前后端镜像发布到 GitHub Container Registry（`ghcr.io`） |
+| Dependabot | 每周 | pip / npm / docker / actions 依赖更新检查 |
 
 ## 🤝 贡献
 

@@ -9,18 +9,50 @@ from PIL import Image
 import numpy as np
 from typing import Optional, Tuple
 import cv2
+import threading
 try:
     from mtcnn import MTCNN  # pip install mtcnn
     _MTCNN_AVAILABLE = True
 except Exception:
     _MTCNN_AVAILABLE = False
 import math
-import random
-try:
-    # 尝试导入 Keras EfficientNet 预处理函数，某些环境静态分析可能无法解析该模块
-    from tensorflow.keras.applications.efficientnet import preprocess_input as _tf_efficientnet_preprocess
-except Exception:
-    _tf_efficientnet_preprocess = None
+
+# MTCNN 检测器单例：构建三个子网络开销大，必须复用（视频逐帧分析尤其明显）
+_MTCNN_DETECTOR = None
+_MTCNN_LOCK = threading.Lock()
+
+
+def get_mtcnn_detector():
+    """获取进程级共享的 MTCNN 检测器；未安装 mtcnn 时返回 None。"""
+    global _MTCNN_DETECTOR
+    if not _MTCNN_AVAILABLE:
+        return None
+    if _MTCNN_DETECTOR is None:
+        with _MTCNN_LOCK:
+            if _MTCNN_DETECTOR is None:
+                _MTCNN_DETECTOR = MTCNN()
+    return _MTCNN_DETECTOR
+
+
+# Haar 级联检测器同样只加载一次
+_HAAR_CASCADE = None
+_HAAR_LOCK = threading.Lock()
+
+
+def get_haar_cascade():
+    """获取进程级共享的 Haar 人脸级联检测器；加载失败返回 None。"""
+    global _HAAR_CASCADE
+    if _HAAR_CASCADE is None:
+        with _HAAR_LOCK:
+            if _HAAR_CASCADE is None:
+                try:
+                    cascade = cv2.CascadeClassifier(
+                        cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+                    )
+                    _HAAR_CASCADE = cascade if not cascade.empty() else False
+                except Exception:
+                    _HAAR_CASCADE = False
+    return _HAAR_CASCADE or None
 
 
 def preprocess_96x96_gray(image: Image.Image) -> np.ndarray:
@@ -86,16 +118,10 @@ def preprocess_for_shape(image: Image.Image, target_shape: Tuple[int, int, int],
             arr[..., 1] -= 116.779
             arr[..., 2] -= 123.68
         elif mode == 'efficientnet':
-            # 与桌面应用 emotion_recognition_app.py 保持一致：
-            # 使用顶部尝试导入的 _tf_efficientnet_preprocess（若可用）
-            if _tf_efficientnet_preprocess is not None:
-                try:
-                    arr = _tf_efficientnet_preprocess(arr)
-                except Exception:
-                    arr = arr / 255.0
-            else:
-                # 回退：按 standard 方式缩放到 [0,1]
-                arr = arr / 255.0
+            # SE 模型训练时使用 tf.keras.applications.efficientnet.preprocess_input，
+            # 在 TF 2.x 中它是直通（保持 0-255），归一化由模型内部的 Rescaling 层完成。
+            # 这里显式透传，保证装不装 TensorFlow 行为一致。
+            pass
         else:
             # simple mode: just scale to [0,1]
             arr = arr / 255.0
@@ -161,28 +187,6 @@ def preprocess_for_model(image: Image.Image, model=None, loaded=None, fallback: 
     return preprocess_for_shape(image, shape, mode=mode)
 
 
-# 新增随机擦除逻辑
-def random_erasing(image: np.ndarray, p=0.5, s_l=0.02, s_h=0.2, r1=0.3):
-    """对图像进行随机擦除"""
-    if random.uniform(0, 1) > p:
-        return image
-    h, w, c = image.shape
-    area = h * w
-    for _ in range(10):
-        target_area = random.uniform(s_l, s_h) * area
-        aspect_ratio = random.uniform(r1, 1 / r1)
-
-        erase_h = int(round((target_area * aspect_ratio) ** 0.5))
-        erase_w = int(round((target_area / aspect_ratio) ** 0.5))
-
-        if erase_h < h and erase_w < w:
-            x1 = random.randint(0, h - erase_h)
-            y1 = random.randint(0, w - erase_w)
-            image[x1:x1 + erase_h, y1:y1 + erase_w, :] = np.random.uniform(0, 255, (erase_h, erase_w, c))
-            break
-    return image
-
-
 # 兼容旧函数名：从路径读取并按96x96灰度处理
 def preprocess_image(image_path: str) -> np.ndarray:
     img = Image.open(image_path)
@@ -197,10 +201,10 @@ def detect_and_align_mtcnn(image: Image.Image, desired_size: int = 112, margin: 
     - margin: 在裁剪时留出的边距像素
     返回：PIL.Image 或 None（未检测到）
     """
-    if not _MTCNN_AVAILABLE:
+    detector = get_mtcnn_detector()
+    if detector is None:
         return None
 
-    detector = MTCNN()
     rgb = image.convert('RGB')
     res = detector.detect_faces(np.array(rgb))
     if not res:
@@ -219,13 +223,7 @@ def detect_and_align_mtcnn(image: Image.Image, desired_size: int = 112, margin: 
 
     if not (le and re and nose and lm and rm):
         # 如果缺关键点，退化为 box 裁剪 + resize
-        x, y, w, h = box
-        x = max(0, x - margin)
-        y = max(0, y - margin)
-        w = w + 2 * margin
-        h = h + 2 * margin
-        crop = rgb.crop((x, y, x + w, y + h))
-        return crop.resize((desired_size, desired_size))
+        return _crop_face_box(rgb, box, margin, desired_size)
 
     # 基于五点的相似变换对齐（ArcFace 模板）
     aligned = _align_by_five_points(rgb, le, re, nose, lm, rm, output_size=(desired_size, desired_size))
@@ -239,27 +237,25 @@ def detect_and_align_mtcnn(image: Image.Image, desired_size: int = 112, margin: 
     # 旋转整张图（作为兜底方案）
     rotated = rgb.rotate(-angle, resample=Image.BILINEAR, expand=True)
 
-    # 旋转后关键点的大致新位置（简化：忽略旋转中心偏移，下面通过更大裁剪 margin 覆盖）
     # 重新用 MTCNN 检测一次，得到旋转后的 box（更稳妥）
     res2 = detector.detect_faces(np.array(rotated))
     if not res2:
         # 退化为原 box 裁剪
-        x, y, w, h = box
-        x = max(0, x - margin)
-        y = max(0, y - margin)
-        w = w + 2 * margin
-        h = h + 2 * margin
-        crop = rgb.crop((x, y, x + w, y + h))
-        return crop.resize((desired_size, desired_size))
+        return _crop_face_box(rgb, box, margin, desired_size)
 
     face2 = max(res2, key=lambda d: d.get('confidence', 0))
-    x2, y2, w2, h2 = face2['box']
-    x2 = max(0, x2 - margin)
-    y2 = max(0, y2 - margin)
-    w2 = w2 + 2 * margin
-    h2 = h2 + 2 * margin
-    crop2 = rotated.crop((x2, y2, x2 + w2, y2 + h2))
-    return crop2.resize((desired_size, desired_size))
+    return _crop_face_box(rotated, face2['box'], margin, desired_size)
+
+
+def _crop_face_box(image_rgb: Image.Image, box, margin: int, desired_size: int) -> Image.Image:
+    """按人脸框裁剪并 resize 到目标尺寸；越界部分收口到图像边界内。"""
+    x, y, w, h = box
+    x1 = max(0, x - margin)
+    y1 = max(0, y - margin)
+    x2 = min(image_rgb.width, x + w + margin)
+    y2 = min(image_rgb.height, y + h + margin)
+    crop = image_rgb.crop((x1, y1, x2, y2))
+    return crop.resize((desired_size, desired_size))
 
 
 def _align_by_five_points(image_rgb: Image.Image,

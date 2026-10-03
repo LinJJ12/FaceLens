@@ -9,7 +9,6 @@ from PIL import Image
 import os
 import logging
 from datetime import datetime
-import tempfile
 from typing import List, Dict, Tuple, Optional
 import base64
 import io
@@ -130,10 +129,15 @@ class VideoEmotionProcessor:
             
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration = total_frames / fps if fps > 0 else 0
-            
-            # 计算提取间隔的帧数
-            frame_interval = int(fps * interval_seconds)
+            duration = total_frames / fps if fps and fps > 0 else 0
+
+            # fps 异常（损坏/不可读的视频）时提前失败，避免后续除零
+            if not fps or fps <= 0 or fps != fps:  # fps != fps 捕获 NaN
+                cap.release()
+                raise ValueError(f"无法读取视频帧率，文件可能已损坏: {video_path}")
+
+            # 计算提取间隔的帧数（interval<=0 时强制为 1 帧一取，防止取模除零）
+            frame_interval = max(1, int(fps * interval_seconds))
             
             logger.info(f"🎬 开始提取视频帧: 间隔={interval_seconds}秒, FPS={fps}, 总时长={duration:.1f}秒")
             

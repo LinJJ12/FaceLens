@@ -733,7 +733,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useEmotionStore } from '../stores/emotion'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { InfoFilled, Medal, Reading, WarningFilled, Refresh, ArrowDown, ArrowUp, Document, VideoCamera } from '@element-plus/icons-vue'
@@ -766,9 +766,10 @@ const allEmotionRecords = computed(() => {
     })
   })
 
-  // 本地图片预测：仅补充服务端没有的记录
+  // 本地图片预测：仅补充服务端没有的记录（分页外的服务端记录由本地副本兜底展示）
+  const serverHistoryIds = new Set((emotionStore.serverHistories || []).map(r => r.id))
   ;(emotionStore.predictions || []).forEach(pred => {
-    if (pred.history_id) return
+    if (pred.history_id && serverHistoryIds.has(pred.history_id)) return
     records.push({ ...pred, source: 'image', origin: 'local' })
   })
 
@@ -782,7 +783,7 @@ const allEmotionRecords = computed(() => {
             emotion: frame.emotion,
             emotion_cn: frame.emotion_cn,
             confidence: frame.confidence,
-            timestamp: frame.timestamp || video.timestamp,
+            timestamp: video.timestamp, // frame.timestamp 是视频内秒数，不能当日期
             source: 'video',
             video_id: video.video_id,
             origin: 'local'
@@ -1738,8 +1739,14 @@ function stopBreathing() {
   breathingInstruction.value = '选择一种呼吸法，点击开始按钮'
   if (breathingTimer) {
     clearTimeout(breathingTimer)
+    breathingTimer = null
   }
 }
+
+// 离开页面时终止呼吸训练的 setTimeout 链，否则练习会话会在后台无限延续
+onUnmounted(() => {
+  stopBreathing()
+})
 
 // 渐进式肌肉放松
 const pmrStep = ref(0)

@@ -115,18 +115,20 @@ router.beforeEach(async (to, from, next) => {
       })
       return
     }
-    
-    // 已登录，验证token有效性
-    try {
-      await userStore.fetchUserInfo()
-    } catch (error) {
-      // token无效，清除用户信息并跳转到登录页
-      userStore.clearUser()
-      next({
-        path: '/login',
-        query: { redirect: to.fullPath }
-      })
-      return
+
+    // 已登录：仅在会话内首次导航时校验 token（fetchUserInfo 内部含 401 刷新兜底）。
+    // 注意 fetchUserInfo 失败时返回 false 而不是抛异常，必须检查返回值。
+    if (!userStore.user?.username) {
+      const ok = await userStore.fetchUserInfo()
+      if (!ok) {
+        // token无效，清除用户信息并跳转到登录页
+        userStore.clearUser()
+        next({
+          path: '/login',
+          query: { redirect: to.fullPath }
+        })
+        return
+      }
     }
   }
   

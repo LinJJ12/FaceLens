@@ -284,8 +284,7 @@ const allHistoryRecords = computed(() => {
 
     // 本地图片预测中没有服务端ID的（历史遗留/离线数据）
     ;(emotionStore.predictions || []).forEach((pred) => {
-      if (pred.history_id && serverHistoryIds.has(pred.history_id)) return
-      if (pred.history_id) return // 服务端已有同ID记录（可能超出分页范围）
+      if (pred.history_id && serverHistoryIds.has(pred.history_id)) return // 服务端已有同ID记录
       records.push(mapLocalPrediction(pred))
     })
 
@@ -342,7 +341,7 @@ const filteredPredictions = computed(() => {
     }
 
     // 模型过滤
-    if (searchForm.value.model && !String(prediction.model_used || '').includes(searchForm.value.model)) {
+    if (searchForm.value.model && !String(prediction.model_used || '').toLowerCase().includes(String(searchForm.value.model).toLowerCase())) {
       return false
     }
 

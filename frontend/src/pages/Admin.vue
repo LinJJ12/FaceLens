@@ -578,10 +578,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="positive_rate" label="积极率" width="100">
-          <template #default="{ row }">{{ row.positive_rate ? (row.positive_rate * 100).toFixed(1) + '%' : '-' }}</template>
+          <template #default="{ row }">{{ row.positive_rate != null ? Number(row.positive_rate).toFixed(1) + '%' : '-' }}</template>
         </el-table-column>
         <el-table-column prop="negative_rate" label="消极率" width="100">
-          <template #default="{ row }">{{ row.negative_rate ? (row.negative_rate * 100).toFixed(1) + '%' : '-' }}</template>
+          <template #default="{ row }">{{ row.negative_rate != null ? Number(row.negative_rate).toFixed(1) + '%' : '-' }}</template>
         </el-table-column>
         <el-table-column prop="emotion_stability" label="情绪稳定性" width="120" />
         <el-table-column label="操作" width="200">
@@ -801,8 +801,8 @@
               {{ selectedAssessment.risk_level_cn }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="积极率">{{ (selectedAssessment.positive_rate * 100).toFixed(1) }}%</el-descriptions-item>
-          <el-descriptions-item label="消极率">{{ (selectedAssessment.negative_rate * 100).toFixed(1) }}%</el-descriptions-item>
+          <el-descriptions-item label="积极率">{{ Number(selectedAssessment.positive_rate || 0).toFixed(1) }}%</el-descriptions-item>
+          <el-descriptions-item label="消极率">{{ Number(selectedAssessment.negative_rate || 0).toFixed(1) }}%</el-descriptions-item>
           <el-descriptions-item label="情绪稳定性" :span="2">{{ selectedAssessment.emotion_stability }}</el-descriptions-item>
         </el-descriptions>
         <el-divider />

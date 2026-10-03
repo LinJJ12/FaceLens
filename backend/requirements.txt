@@ -4,13 +4,23 @@ Flask-SQLAlchemy==3.0.5
 Pillow==10.0.0
 python-dotenv==1.0.0
 PyJWT==2.8.0
-opencv-python==4.8.1.78
-opencv-contrib-python==4.8.1.78
+Werkzeug==2.3.7
 
-# 环境：Python 3.8（本地验证版本）
+# opencv-contrib 已包含普通版功能；headless 无 GUI 依赖，服务器/CI 无需 libGL
+opencv-contrib-python-headless==4.8.1.78
+
+# numpy 必须固定 <2：TensorFlow 2.10 与 opencv 4.8 均不兼容 numpy 2.x
+numpy==1.24.4
+
+# 人脸检测与对齐（MTCNN；未安装时后端会优雅回退到 Haar 级联）
+mtcnn==0.1.1
+
+# 生产 WSGI 服务器（docker-entrypoint.sh 使用）
+gunicorn==21.2.0
+
 # 深度学习推理需单独安装，建议与训练端一致：
 # pip install "tensorflow==2.10.1"
+# （TensorFlow 2.10 仅支持 Python 3.7-3.10）
 
 # Optional: if database is needed
 # pymysql==1.1.0
-

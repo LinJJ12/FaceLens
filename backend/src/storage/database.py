@@ -364,6 +364,50 @@ def _upgrade_sqlite_schema():
         'emotion_stability': 'FLOAT',
         'based_on_days': 'INTEGER DEFAULT 1',
     })
+    try:
+        _normalize_legacy_rate_rows()
+    except Exception as e:
+        logger.warning('历史占比数据归一化失败: %s', e)
+
+
+def _normalize_legacy_rate_rows():
+    """
+    旧版本 update_health_tables 把 positive_rate/negative_rate 存成 0-1 小数，
+    新版统一为 0-100 百分数。启动时把能被计数验证为小数的历史行 ×100 归一，
+    并清理每日重复的健康评估行（旧行为每次预测都插入一条）。
+    """
+    summaries = UserEmotionSummary.query.filter(UserEmotionSummary.total_predictions > 0).all()
+    fixed = 0
+    for s in summaries:
+        if s.positive_rate is None or s.negative_rate is None:
+            continue
+        total = s.total_predictions
+        # 仅当数值与"小数语义"完全吻合时才迁移，避免误改真实的百分数
+        pos_frac = round((s.positive_count or 0) / total, 2)
+        neg_frac = round((s.negative_count or 0) / total, 2)
+        if (0 <= s.positive_rate <= 1 and abs(s.positive_rate - pos_frac) < 0.005
+                and 0 <= s.negative_rate <= 1 and abs(s.negative_rate - neg_frac) < 0.005):
+            s.positive_rate = round(s.positive_rate * 100, 2)
+            s.negative_rate = round(s.negative_rate * 100, 2)
+            fixed += 1
+    if fixed:
+        db.session.commit()
+        logger.info('已将 %d 行历史情绪占比从 0-1 小数归一为百分数', fixed)
+
+    # 健康评估按 (username, assessment_date) 去重，保留 id 最小的一条
+    assessments = HealthAssessment.query.order_by(HealthAssessment.id).all()
+    seen = set()
+    removed = 0
+    for a in assessments:
+        key = (a.username, a.assessment_date)
+        if key in seen:
+            db.session.delete(a)
+            removed += 1
+        else:
+            seen.add(key)
+    if removed:
+        db.session.commit()
+        logger.info('已清理 %d 条重复的每日健康评估记录', removed)
 
 
 def _upgrade_table_columns(table_name, new_columns):

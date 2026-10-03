@@ -946,7 +946,8 @@ async function saveProfile() {
       // 服务端可能返回规范化后的用户信息
       const serverUser = result.data?.user
       if (serverUser?.email) userInfo.value.email = serverUser.email
-      localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+      // 资料存独立键，避免覆盖登录态 userInfo（用户名/角色）
+      localStorage.setItem('userProfile', JSON.stringify(userInfo.value))
       editProfileDialog.value = false
       ElMessage.success('资料已更新')
     }

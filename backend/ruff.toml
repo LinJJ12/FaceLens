@@ -1,0 +1,10 @@
+# 面向 CI 的轻量静态检查：语法错误 / 未定义名 / 未使用导入
+line-length = 120
+
+[lint]
+select = ["E9", "F63", "F7", "F82", "F401"]
+exclude = ["tests", "scripts"]
+
+[lint.per-file-ignores]
+# app.py 导出的符号较多，个别历史保留导入暂不清理
+"src/api/app.py" = ["F401"]

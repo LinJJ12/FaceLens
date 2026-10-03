@@ -1,6 +1,14 @@
 """
-测试后端API的脚本
+测试后端API的脚本（手动联调用：需要运行中的后端，默认跳过）
+运行: FACELENS_LIVE_API=1 pytest tests/test_api.py  （后端已启动时）
 """
+import os
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get('FACELENS_LIVE_API') != '1',
+    reason='需要运行中的后端（设置 FACELENS_LIVE_API=1 并启动后端后启用）',
+)
 import requests
 import json
 import base64

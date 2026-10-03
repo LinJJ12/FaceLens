@@ -1,13 +1,24 @@
 """
-测试SE SavedModel加载
+测试SE SavedModel加载（需要 TensorFlow 与 SE 模型权重，缺一即跳过）
 """
 import sys
 import os
 from pathlib import Path
 
+import pytest
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+pytest.importorskip('tensorflow', reason='需要 TensorFlow 才能加载 SavedModel')
+
+from src.config.settings import MODEL_PATHS
+
+pytestmark = pytest.mark.skipif(
+    not all(os.path.exists(str(MODEL_PATHS.get(n, ''))) for n in ('se81', 'se83')),
+    reason='需要 SE 模型权重文件',
+)
 
 import numpy as np
 import tensorflow as tf

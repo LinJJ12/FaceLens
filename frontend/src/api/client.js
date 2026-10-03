@@ -25,75 +25,87 @@ api.interceptors.request.use(
   }
 )
 
+// 刷新令牌的单飞（single-flight）：并发多个 401 时只发一次刷新请求。
+// 后端 refreshToken 是一次性的，若每个 401 各自刷新，除第一个外都会失败并误登出。
+let refreshPromise = null
+
+function clearCredentials() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('userInfo')
+}
+
+function redirectToLogin() {
+  // 项目使用 hash 路由（createWebHashHistory），pathname 永远是 '/'，
+  // 必须用 hash 跳转，否则整页重载
+  if (window.location.hash.startsWith('#/login')) return
+  const current = window.location.hash.slice(1) || '/'
+  window.location.hash = `#/login?redirect=${encodeURIComponent(current)}`
+}
+
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = localStorage.getItem('refreshToken')
+      if (!refreshToken) throw new Error('no refresh token')
+      const response = await axios.post('/api/auth/refresh', { refreshToken })
+      const { token, refreshToken: newRefreshToken } = response.data
+      localStorage.setItem('token', token)
+      localStorage.setItem('refreshToken', newRefreshToken)
+      return token
+    })().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
+}
+
 // 响应拦截器
 api.interceptors.response.use(
   response => {
     return response
   },
   async error => {
-    let message = '请求失败'
-    
-    if (error.response) {
-      switch (error.response.status) {
-        case 400:
-          message = '请求参数错误'
-          break
-        case 401:
-          // Token过期或无效
-          const token = localStorage.getItem('token')
-          const refreshToken = localStorage.getItem('refreshToken')
-          
-          if (token && refreshToken && !error.config._retry) {
-            error.config._retry = true
-            
-            try {
-              // 尝试刷新token
-              const response = await axios.post('/api/auth/refresh', {
-                refreshToken: refreshToken
-              })
-              
-              const { token: newToken, refreshToken: newRefreshToken } = response.data
-              localStorage.setItem('token', newToken)
-              localStorage.setItem('refreshToken', newRefreshToken)
-              
-              // 重新发送原始请求
-              error.config.headers.Authorization = `Bearer ${newToken}`
-              return api(error.config)
-            } catch (refreshError) {
-              // 刷新失败，清除用户信息并跳转到登录页
-              localStorage.removeItem('token')
-              localStorage.removeItem('refreshToken')
-              localStorage.removeItem('userInfo')
-              
-              // 只有在非登录页面才跳转
-              if (window.location.pathname !== '/login') {
-                window.location.href = '/login'
-              }
-            }
-          }
-          message = '登录已过期，请重新登录'
-          break
-        case 403:
-          message = '没有权限访问此资源'
-          break
-        case 404:
-          message = '请求的资源不存在'
-          break
-        case 500:
-          message = '服务器错误'
-          break
-        default:
-          message = error.response.data?.error || error.response.data?.message || '请求失败'
+    const status = error.response?.status
+    const data = error.response?.data || {}
+
+    if (status === 401) {
+      const token = localStorage.getItem('token')
+      const refreshToken = localStorage.getItem('refreshToken')
+
+      if (token && refreshToken && !error.config._retry) {
+        error.config._retry = true
+        try {
+          const newToken = await refreshAccessToken()
+          error.config.headers.Authorization = `Bearer ${newToken}`
+          return api(error.config)
+        } catch (refreshError) {
+          // 刷新失败，清除用户信息并跳转到登录页
+          clearCredentials()
+          redirectToLogin()
+          ElMessage.error('登录已过期，请重新登录')
+          return Promise.reject(error)
+        }
       }
-    } else if (error.request) {
-      message = '无法连接到服务器'
+
+      // 无刷新令牌可用：清理并提示（不再静默失败）
+      if (error.config._retry || !refreshToken) {
+        clearCredentials()
+        redirectToLogin()
+        ElMessage.error('登录已过期，请重新登录')
+      }
+      return Promise.reject(error)
     }
-    
-    // 只在非401错误时显示消息，401错误由上面的逻辑处理
-    if (error.response?.status !== 401) {
-      ElMessage.error(message)
-    }
-    
+
+    let message = data.error || data.message || '请求失败'
+    if (status === 400) message = data.error || '请求参数错误'
+    else if (status === 403) message = data.error || '没有权限访问此资源'
+    else if (status === 404) message = data.error || '请求的资源不存在'
+    else if (status === 413) message = data.error || '上传内容过大'
+    else if (status === 500) message = data.error || '服务器错误'
+    else if (!error.response) message = '无法连接到服务器'
+
+    ElMessage.error(message)
     return Promise.reject(error)
   }
 )

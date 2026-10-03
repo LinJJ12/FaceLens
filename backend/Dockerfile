@@ -24,11 +24,13 @@ WORKDIR /app/backend
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN chmod +x /app/backend/docker-entrypoint.sh
+RUN chmod +x /app/backend/docker-entrypoint.sh     && mkdir -p /app/backend/data     && useradd -m appuser     && chown -R appuser:appuser /app/backend
+
+USER appuser
 
 EXPOSE 5000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health')" || exit 1
 
 ENTRYPOINT ["/app/backend/docker-entrypoint.sh"]

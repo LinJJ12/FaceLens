@@ -1,14 +1,18 @@
 """
-快速验证修复效果的脚本
+快速验证修复效果的脚本（需要 TensorFlow 与模型权重，缺一即跳过）
 使用一张测试图片,分别用VGG和SE模型预测,查看置信度
 """
 import sys
 import os
 from pathlib import Path
 
+import pytest
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+pytest.importorskip('tensorflow', reason='需要 TensorFlow 才能验证模型')
 
 import numpy as np
 from PIL import Image

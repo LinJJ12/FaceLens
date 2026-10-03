@@ -75,7 +75,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true, data: response.data }
     } catch (error) {
       console.error('登录失败:', error)
-      const errorMessage = error.response?.data?.message || '登录失败，请重试'
+      const errorMessage = error.response?.data?.error || '登录失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -93,7 +93,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true, data: response.data }
     } catch (error) {
       console.error('注册失败:', error)
-      const errorMessage = error.response?.data?.message || '注册失败，请重试'
+      const errorMessage = error.response?.data?.error || '注册失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -187,7 +187,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true, data: response.data }
     } catch (error) {
       console.error('更新用户信息失败:', error)
-      const errorMessage = error.response?.data?.message || '更新失败，请重试'
+      const errorMessage = error.response?.data?.error || '更新失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -209,7 +209,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true }
     } catch (error) {
       console.error('修改密码失败:', error)
-      const errorMessage = error.response?.data?.message || '修改失败，请重试'
+      const errorMessage = error.response?.data?.error || '修改失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -227,7 +227,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true }
     } catch (error) {
       console.error('发送重置邮件失败:', error)
-      const errorMessage = error.response?.data?.message || '发送失败，请重试'
+      const errorMessage = error.response?.data?.error || '发送失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -245,7 +245,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true }
     } catch (error) {
       console.error('重置密码失败:', error)
-      const errorMessage = error.response?.data?.message || '重置失败，请重试'
+      const errorMessage = error.response?.data?.error || '重置失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -263,7 +263,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true }
     } catch (error) {
       console.error('邮箱验证失败:', error)
-      const errorMessage = error.response?.data?.message || '验证失败，请重试'
+      const errorMessage = error.response?.data?.error || '验证失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -285,7 +285,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true }
     } catch (error) {
       console.error('重新发送验证邮件失败:', error)
-      const errorMessage = error.response?.data?.message || '发送失败，请重试'
+      const errorMessage = error.response?.data?.error || '发送失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -309,7 +309,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true }
     } catch (error) {
       console.error('删除账户失败:', error)
-      const errorMessage = error.response?.data?.message || '删除失败，请重试'
+      const errorMessage = error.response?.data?.error || '删除失败，请重试'
       ElMessage.error(errorMessage)
       return { success: false, error: errorMessage }
     } finally {
@@ -364,7 +364,7 @@ export const useUserStore = defineStore('user', () => {
       return { success: true, data: response.data }
     } catch (error) {
       console.error('获取用户统计失败:', error)
-      return { success: false, error: error.response?.data?.message || '获取失败' }
+      return { success: false, error: error.response?.data?.error || '获取失败' }
     }
   }
 
