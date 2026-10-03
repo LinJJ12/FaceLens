@@ -83,7 +83,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 设置 Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: 构建后端镜像（验证 Dockerfile 与 entrypoint）
         uses: docker/build-push-action@v6
