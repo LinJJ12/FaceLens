@@ -97,8 +97,8 @@ flowchart LR
 ### 1️⃣ 克隆仓库
 
 ```bash
-git clone https://github.com/LinJJ12/RAF-DB-Based-Facial-Emotion-Recognition-System.git
-cd RAF-DB-Based-Facial-Emotion-Recognition-System
+git clone https://github.com/LinJJ12/FaceLens.git
+cd FaceLens
 ```
 
 ### 2️⃣ 启动后端（模式 B / C）
@@ -144,8 +144,8 @@ npm run dev
 无需本地安装 Python / Node，一键启动前后端：
 
 ```bash
-git clone https://github.com/LinJJ12/RAF-DB-Based-Facial-Emotion-Recognition-System.git
-cd RAF-DB-Based-Facial-Emotion-Recognition-System
+git clone https://github.com/LinJJ12/FaceLens.git
+cd FaceLens
 
 cp .env.example .env       # 编辑 .env，设置 JWT_SECRET_KEY
 docker compose up -d --build

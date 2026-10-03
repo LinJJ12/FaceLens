@@ -149,8 +149,8 @@
         </div>
         <div class="footer-section">
           <h4>开源仓库</h4>
-          <a href="https://github.com/LinJJ12/RAF-DB-Based-Facial-Emotion-Recognition-System" target="_blank" rel="noopener">GitHub 项目主页</a>
-          <a href="https://github.com/LinJJ12/RAF-DB-Based-Facial-Emotion-Recognition-System/issues" target="_blank" rel="noopener">提交 Issue</a>
+          <a href="https://github.com/LinJJ12/FaceLens" target="_blank" rel="noopener">GitHub 项目主页</a>
+          <a href="https://github.com/LinJJ12/FaceLens/issues" target="_blank" rel="noopener">提交 Issue</a>
         </div>
         <div class="footer-section">
           <h4>技术栈</h4>
