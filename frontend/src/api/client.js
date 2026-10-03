@@ -70,6 +70,13 @@ api.interceptors.response.use(
     const data = error.response?.data || {}
 
     if (status === 401) {
+      // 登录/注册本身的 401（密码错误等）不是会话过期，直接透出后端错误信息
+      const url = error.config?.url || ''
+      if (url.includes('/auth/login') || url.includes('/auth/register')) {
+        ElMessage.error(data.error || '用户名或密码错误')
+        return Promise.reject(error)
+      }
+
       const token = localStorage.getItem('token')
       const refreshToken = localStorage.getItem('refreshToken')
 

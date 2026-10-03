@@ -21,17 +21,17 @@
 
 ---
 
-## 📸 系统预览
+## 📸 系统预览（深色主题）
 
 | 门户首页 | 登录 |
 |:---:|:---:|
 | ![门户首页](docs/screenshots/landing.jpg) | ![登录](docs/screenshots/login.jpg) |
-| **工作台** | **图片识别** |
-| ![工作台](docs/screenshots/home.jpg) | ![图片识别](docs/screenshots/image-analysis.jpg) |
-| **心理健康** | **深色模式** |
-| ![心理健康](docs/screenshots/health.jpg) | ![深色模式](docs/screenshots/dark/home-dark.jpg) |
+| **工作台** | **数据分析** |
+| ![工作台](docs/screenshots/home.jpg) | ![数据分析](docs/screenshots/data-analysis.jpg) |
+| **心理健康** | **图片识别** |
+| ![心理健康](docs/screenshots/health.jpg) | ![图片识别](docs/screenshots/image-analysis.jpg) |
 
-> 界面包含浅色 / 深色双主题（更多深色样张见 [docs/screenshots/dark/](docs/screenshots/dark/)），支持响应式布局；
+> 界面包含深色 / 浅色双主题（浅色样张见 [docs/screenshots/light/](docs/screenshots/light/)），支持响应式布局；
 > 未登录访问 `/` 会看到产品落地页，登录后进入 `/home` 工作台。
 
 ## ✨ 功能特性

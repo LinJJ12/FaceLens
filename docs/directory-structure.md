@@ -61,8 +61,8 @@ FaceLens/
 | 路径 | 用途 |
 |------|------|
 | `docs/banner.svg` | README 顶部横幅 |
-| `docs/screenshots/` | README 展示截图（浅色为主） |
-| `docs/screenshots/dark/` | 深色主题样张 |
+| `docs/screenshots/` | README 展示截图（深色主题） |
+| `docs/screenshots/light/` | 浅色主题样张 |
 | `frontend/public/favicon.svg` | 极简镜头图形 favicon |
 | `frontend/src/assets/landing-preview.jpg` | 落地页界面预览图 |
 

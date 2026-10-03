@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 安装 Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -83,10 +83,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 设置 Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: 构建后端镜像（验证 Dockerfile 与 entrypoint）
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: backend/Dockerfile
@@ -96,8 +96,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: 后端镜像运行冒烟（cv2 / 视频IO / 设置加载）
+        run: |
+          docker run --rm --entrypoint python facelens-backend:ci -c "
+          import cv2, numpy as np
+          print('cv2', cv2.__version__)
+          p = '/tmp/s.mp4'
+          w = cv2.VideoWriter(p, cv2.VideoWriter_fourcc(*'mp4v'), 10, (64, 64))
+          for i in range(5):
+              w.write(np.full((64, 64, 3), 128, dtype=np.uint8))
+          w.release()
+          cap = cv2.VideoCapture(p)
+          ret, _ = cap.read()
+          cap.release()
+          assert ret, 'VideoCapture failed'
+          from src.config.settings import MODEL_PATHS
+          print('backend image smoke ok')
+          "
+
       - name: 构建前端镜像
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: frontend/Dockerfile

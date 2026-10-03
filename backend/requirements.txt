@@ -12,8 +12,10 @@ opencv-contrib-python-headless==4.8.1.78
 # numpy 必须固定 <2：TensorFlow 2.10 与 opencv 4.8 均不兼容 numpy 2.x
 numpy==1.24.4
 
-# 人脸检测与对齐（MTCNN；未安装时后端会优雅回退到 Haar 级联）
-mtcnn==0.1.1
+# 人脸检测与对齐（可选）：mtcnn 不列入默认依赖——其元数据会连带安装
+# GUI 版 opencv-python 与 keras，与 headless opencv 冲突。
+# 需要时请单独执行: pip install --no-deps mtcnn==0.1.1
+# （Docker 镜像内已按此方式安装；未安装时后端自动回退到 Haar 级联）
 
 # 生产 WSGI 服务器（docker-entrypoint.sh 使用）
 gunicorn==21.2.0

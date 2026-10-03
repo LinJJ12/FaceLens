@@ -5,18 +5,13 @@ FROM python:3.8-slim-bullseye
 
 WORKDIR /app
 
-# OpenCV / TensorFlow 运行时依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    && rm -rf /var/lib/apt/lists/*
-
+# 说明：使用 opencv-contrib-python-headless（无 GUI 依赖），不需要 apt 安装
+# libgl/libsm 等 X11 库；Debian bullseye 已于 2026-08 结束 LTS、apt 源失效，
+# 因此本镜像刻意保持零 apt 操作，避免构建失败。
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt \
-    && pip install --no-cache-dir "tensorflow==2.10.1" gunicorn==21.2.0
+    && pip install --no-cache-dir "tensorflow==2.10.1" gunicorn==21.2.0 \
+    && pip install --no-cache-dir --no-deps "mtcnn==0.1.1"
 
 COPY backend /app/backend
 
