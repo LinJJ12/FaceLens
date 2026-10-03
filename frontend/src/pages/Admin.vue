@@ -1170,14 +1170,6 @@ const fetchHistories = async () => {
   try {
     const res = await api.get('/admin/histories')
     histories.value = res.data.histories
-    
-    // 🐛 调试：检查视频记录的 username 字段
-    const videoRecords = res.data.histories.filter(h => h.input_type === 'video')
-    console.log('📹 [Admin] 视频记录数量:', videoRecords.length)
-    if (videoRecords.length > 0) {
-      console.log('📹 [Admin] 第一条视频记录:', videoRecords[0])
-      console.log('📹 [Admin] 视频记录的 username:', videoRecords.map(v => ({ id: v.id, username: v.username, input_type: v.input_type })))
-    }
   } catch (err) {
     console.error('获取历史记录失败:', err)
     ElMessage.error('获取历史记录失败')
@@ -2115,14 +2107,11 @@ const viewImageDetail = (row) => {
   imageLoadError.value = false
   imageErrorMessage.value = ''
   showImageDialog.value = true
-  
-  console.log('🖼️ 加载图片:', src)
 }
 
 // 图片加载成功
 const handleImageLoad = () => {
   imageLoadError.value = false
-  console.log('✅ 图片加载成功')
 }
 
 // 图片加载失败
@@ -2155,7 +2144,7 @@ onMounted(async () => {
     ElMessage.error('权限不足，只有管理员可以访问此页面')
     // 延迟跳转，避免组件渲染问题
     setTimeout(() => {
-      router.push('/')
+      router.push('/home')
     }, 1000)
     return
   }
@@ -2241,15 +2230,13 @@ onMounted(async () => {
 
 .header-left h1 {
   font-size: 2.5rem;
-  color: #ffffff;
+  color: var(--color-ink);
   margin-bottom: 0.5rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .header-left p {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-mahogany);
   font-size: 1.1rem;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .header-right .el-tag {
@@ -2395,9 +2382,9 @@ onMounted(async () => {
 }
 
 .action-button:hover {
-  background: #ffffff;
+  background: var(--el-fill-color-light);
   transform: translateX(5px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   border-color: var(--color-sand);
 }
 
@@ -2609,19 +2596,7 @@ onMounted(async () => {
   margin-top: 20px;
 }
 
-/* 深色模式支持 */
-.dark .page-header {
-  background: rgba(44, 44, 44, 0.95);
-}
-
-.dark .page-header h1 {
-  color: #e0e0e0;
-}
-
-.dark .page-header p {
-  color: #b0b0b0;
-}
-
+/* 深色模式支持（页面头部已改用主题令牌，无需单独覆盖） */
 .dark .stat-value {
   color: #e0e0e0;
 }

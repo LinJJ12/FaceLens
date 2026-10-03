@@ -23,13 +23,16 @@
 
 ## 📸 系统预览
 
-| 登录 | 首页 |
+| 门户首页 | 登录 |
 |:---:|:---:|
-| ![登录](docs/screenshots/login.jpg) | ![首页](docs/screenshots/home.jpg) |
-| **图片识别** | **心理健康** |
-| ![图片识别](docs/screenshots/image-analysis.jpg) | ![心理健康](docs/screenshots/health.jpg) |
+| ![门户首页](docs/screenshots/landing.jpg) | ![登录](docs/screenshots/login.jpg) |
+| **工作台** | **图片识别** |
+| ![工作台](docs/screenshots/home.jpg) | ![图片识别](docs/screenshots/image-analysis.jpg) |
+| **心理健康** | **深色模式** |
+| ![心理健康](docs/screenshots/health.jpg) | ![深色模式](docs/screenshots/dark/home-dark.jpg) |
 
-> 界面包含浅色 / 深色双主题，支持响应式布局。
+> 界面包含浅色 / 深色双主题（更多深色样张见 [docs/screenshots/dark/](docs/screenshots/dark/)），支持响应式布局；
+> 未登录访问 `/` 会看到产品落地页，登录后进入 `/home` 工作台。
 
 ## ✨ 功能特性
 
@@ -47,6 +50,11 @@
 - 📄 **报告导出** — 数据分析与视频分析结果一键导出为 PDF 报告
 - 🛠️ **管理后台** — 用户管理、识别历史、日记、感恩记录、健康评估的统一管理，附系统运行信息与后端日志查看
 - 🔐 **JWT 认证** — 注册、登录、令牌自动刷新、资料与头像管理、修改密码
+
+**门户与体验**
+
+- 🏠 **产品落地页** — 未登录访问 `/` 展示功能亮点、模型指标与界面预览，可一键进入登录/注册
+- 🌓 **深浅双主题** — 全部页面与图表跟随主题切换（ECharts 使用与设计令牌一致的自定义主题）
 
 **心理健康辅助**
 
@@ -229,7 +237,7 @@ curl -X POST http://localhost:5000/api/predict \
 │   └── data/                # 运行时数据（uploads / logs / db，默认忽略）
 ├── frontend/                # Vue 3 前端
 │   ├── public/              # Favicon 等静态资源
-│   └── src/                 # pages / api / assets / stores / router
+│   └── src/                 # pages（含 Landing）/ api / utils / assets / stores / router
 ├── training/                # RAF-DB 训练 Notebook 与说明
 ├── models/                  # 模型权重（大文件，默认忽略）
 ├── docs/                    # Banner、截图等文档资源

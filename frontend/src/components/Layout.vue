@@ -7,12 +7,12 @@
           <el-button class="sidebar-toggle" text @click="toggleSidebar">
             <el-icon :size="20"><operation /></el-icon>
           </el-button>
-          <router-link to="/" class="wordmark">FaceLens</router-link>
+          <router-link to="/home" class="wordmark">FaceLens</router-link>
           <span class="brand-tag">人脸情绪识别</span>
         </div>
 
         <nav class="nav-menu">
-          <router-link to="/" class="nav-item" exact-active-class="router-link-active">
+          <router-link to="/home" class="nav-item" exact-active-class="router-link-active">
             <el-icon><home-filled /></el-icon>
             <span>首页</span>
           </router-link>

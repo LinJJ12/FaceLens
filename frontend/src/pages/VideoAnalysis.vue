@@ -259,7 +259,7 @@
               </div>
               <div class="stat-info">
                 <div class="stat-value">
-                  {{ (videoStore.statistics?.average_confidence * 100).toFixed(1) }}%
+                  {{ ((videoStore.statistics?.average_confidence ?? 0) * 100).toFixed(1) }}%
                 </div>
                 <div class="stat-label">平均置信度</div>
               </div>
@@ -893,7 +893,7 @@ onMounted(() => {
 }
 
 .upload-icon {
-  color: #409eff;
+  color: var(--el-color-primary);
   margin-bottom: 20px;
 }
 
@@ -983,8 +983,8 @@ onMounted(() => {
 }
 
 .hint-box {
-  background: #f4f4f5;
-  border-left: 4px solid #409eff;
+  background: var(--el-fill-color-light);
+  border-left: 4px solid var(--el-color-primary);
   padding: 12px 16px;
   border-radius: 4px;
   margin-top: 12px;
@@ -998,7 +998,7 @@ onMounted(() => {
 }
 
 .config-hint strong {
-  color: #409eff;
+  color: var(--el-color-primary);
   font-weight: 600;
 }
 
@@ -1012,7 +1012,7 @@ onMounted(() => {
 }
 
 .analyzing-icon {
-  color: #409eff;
+  color: var(--el-color-primary);
   margin-bottom: 20px;
   animation: rotate 2s linear infinite;
 }

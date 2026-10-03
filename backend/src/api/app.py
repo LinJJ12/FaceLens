@@ -1913,7 +1913,7 @@ def admin_system_info():
 
         info = {
             'app_name': 'FaceLens',
-            'app_version': '2.0.0',
+            'app_version': '2.1.0',
             'uptime_seconds': uptime_seconds,
             'uptime': uptime_text,
             'python_version': sys.version.split()[0],

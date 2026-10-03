@@ -407,7 +407,7 @@ const handleLogin = async () => {
         localStorage.removeItem('rememberedUsername')
       }
       // 跳转到首页或重定向页面
-      const redirect = router.currentRoute.value.query.redirect || '/'
+      const redirect = router.currentRoute.value.query.redirect || '/home'
       router.push(redirect)
     }
     
@@ -483,9 +483,9 @@ const showHelp = () => {
 
 // 组件挂载时的处理
 onMounted(() => {
-  // 检查是否已登录
+  // 已登录用户直接进入工作台
   if (userStore.isLoggedIn) {
-    router.push('/')
+    router.push('/home')
   }
 
   // "记住我"：回填上次登录的用户名

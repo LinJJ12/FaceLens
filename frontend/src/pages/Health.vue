@@ -15,7 +15,7 @@
         <p style="color: var(--color-mahogany); margin-bottom: 1rem;">
           请先在首页上传照片进行情绪识别，系统会为您提供个性化的心理健康建议
         </p>
-        <el-button type="primary" @click="$router.push('/')">
+        <el-button type="primary" @click="$router.push('/home')">
           前往首页识别
         </el-button>
       </el-empty>
@@ -2135,9 +2135,9 @@ onMounted(async () => {
   text-align: center;
   margin-bottom: 2rem;
   padding: 2rem;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--color-surface);
   border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .page-header h1 {
@@ -2505,9 +2505,9 @@ onMounted(async () => {
 
 .contact-item {
   padding: 1.5rem;
-  background: white;
+  background: var(--color-surface);
   border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s;
 }
 
@@ -2660,6 +2660,10 @@ onMounted(async () => {
   border-left: 4px solid #e6a23c;
 }
 
+.dark .knowledge-tips {
+  background: rgba(230, 162, 60, 0.12);
+}
+
 .knowledge-tips h5 {
   color: var(--color-ink);
   margin-bottom: 1rem;
@@ -2712,7 +2716,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background: white;
+  background: var(--color-surface);
   border-radius: 8px;
   transition: all 0.3s;
 }

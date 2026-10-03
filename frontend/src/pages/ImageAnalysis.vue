@@ -494,7 +494,7 @@ watch(() => showCameraDialog.value, (newVal) => {
 
 .upload-icon {
   font-size: 4rem;
-  color: #409eff;
+  color: var(--el-color-primary);
   margin-bottom: 1rem;
 }
 
@@ -567,8 +567,8 @@ watch(() => showCameraDialog.value, (newVal) => {
   max-height: 260px;
   object-fit: contain;
   border-radius: 8px;
-  border: 1px solid #ebeef5;
-  background: #fafafa;
+  border: 1px solid var(--color-sand);
+  background: var(--color-parchment);
 }
 
 .image-note {

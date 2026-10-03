@@ -23,7 +23,7 @@
         <p style="color: var(--color-mahogany); margin-bottom: 1rem;">
           请先在首页上传照片进行情绪识别，系统会为您生成详细的数据分析
         </p>
-        <el-button type="primary" @click="$router.push('/')">
+        <el-button type="primary" @click="$router.push('/home')">
           前往首页识别
         </el-button>
       </el-empty>
@@ -406,6 +406,7 @@ import {
   Delete
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { registerFacelensChartThemes, currentChartTheme, chartToken } from '../utils/chartTheme'
 import { useVideoStore } from '../stores/video'
 import api from '../api/client'
 
@@ -867,13 +868,20 @@ function handleChartsResize() {
 }
 function getChart(name, el) {
   if (!el) return null
+  registerFacelensChartThemes()
+  const theme = currentChartTheme()
   const existing = chartInstances[name]
   if (existing && !existing.isDisposed() && existing.getDom() === el) {
-    existing.clear() // 清空旧配置，随后的 setOption 以干净状态重建
-    return existing
+    if (existing.__facelensTheme === theme) {
+      existing.clear() // 清空旧配置，随后的 setOption 以干净状态重建
+      return existing
+    }
+    // 主题切换：以新主题重建实例
+    existing.dispose()
   }
   if (existing && !existing.isDisposed()) existing.dispose()
-  const chart = echarts.init(el)
+  const chart = echarts.init(el, theme)
+  chart.__facelensTheme = theme
   chartInstances[name] = chart
   if (!chartsResizeBound) {
     chartsResizeBound = true
@@ -882,6 +890,10 @@ function getChart(name, el) {
   return chart
 }
 onUnmounted(() => {
+  if (themeObserver) {
+    themeObserver.disconnect()
+    themeObserver = null
+  }
   if (chartsResizeBound) {
     window.removeEventListener('resize', handleChartsResize)
     chartsResizeBound = false
@@ -929,7 +941,7 @@ function initPieChart() {
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 10,
-          borderColor: '#fff',
+          borderColor: chartToken('--color-surface'),
           borderWidth: 2
         },
         label: {
@@ -1151,6 +1163,7 @@ function initCalendarChart() {
   const dateMap = {}
   allPredictions.value.forEach(pred => {
     const date = new Date(pred.timestamp)
+    if (isNaN(date.getTime())) return // 非法时间戳跳过，避免 toISOString 抛错中断图表
     const dateStr = date.toISOString().split('T')[0]
     dateMap[dateStr] = (dateMap[dateStr] || 0) + 1
   })
@@ -1166,7 +1179,7 @@ function initCalendarChart() {
     },
     visualMap: {
       min: 0,
-      max: Math.max(...Object.values(dateMap)),
+      max: Math.max(1, ...Object.values(dateMap)),
       calculable: true,
       orient: 'horizontal',
       left: 'center',
@@ -1667,7 +1680,13 @@ watch(() => allPredictions.value.length, () => {
   initAllCharts()
 })
 
+let themeObserver = null
+
 onMounted(async () => {
+  // html.dark class 变化即视为主题切换，重建图表以应用新主题
+  themeObserver = new MutationObserver(() => initAllCharts())
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+
   initAllCharts()
 
   // 拉取服务端历史与健康评估（失败时静默降级为本地数据）
@@ -1695,9 +1714,9 @@ onMounted(async () => {
 .page-header {
   margin-bottom: 2rem;
   padding: 2rem;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--color-surface);
   border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .header-content {
@@ -2057,7 +2076,7 @@ onMounted(async () => {
 }
 
 .video-item {
-  background: white;
+  background: var(--color-surface);
   border-radius: 6px;
   padding: 12px;
   cursor: pointer;

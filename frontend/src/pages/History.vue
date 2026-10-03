@@ -345,10 +345,12 @@ const filteredPredictions = computed(() => {
       return false
     }
 
-    // 时间范围过滤
+    // 时间范围过滤（非法/缺失时间戳的记录保留展示，不参与比较）
     if (searchForm.value.dateRange && searchForm.value.dateRange.length === 2) {
       const [startDate, endDate] = searchForm.value.dateRange
-      const predictionDate = new Date(prediction.timestamp).toISOString().split('T')[0]
+      const parsed = new Date(prediction.timestamp)
+      if (isNaN(parsed.getTime())) return true
+      const predictionDate = parsed.toISOString().split('T')[0]
       if (predictionDate < startDate || predictionDate > endDate) {
         return false
       }

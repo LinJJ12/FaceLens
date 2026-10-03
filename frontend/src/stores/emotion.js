@@ -103,7 +103,7 @@ export const useEmotionStore = defineStore('emotion', () => {
     try {
       const response = await api.get('/health')
       isHealthy.value = response.data.status === 'ok'
-      availableModels.value = response.data.available_models
+      availableModels.value = response.data.available_models || []
       return true
     } catch (error) {
       console.error('后端服务连接失败:', error)

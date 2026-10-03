@@ -1606,9 +1606,9 @@ onBeforeUnmount(() => {
   text-align: center;
   margin-bottom: 2rem;
   padding: 2rem;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--color-surface);
   border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .page-header h1 {
@@ -1844,9 +1844,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: white;
+  background: var(--color-surface);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .stat-box-icon {
@@ -2049,9 +2049,9 @@ onBeforeUnmount(() => {
   font-size: 0.9rem;
   margin-top: 0.5rem;
   padding: 0.75rem;
-  background: #ecf5ff;
+  background: var(--el-color-primary-light-9);
   border-radius: 6px;
-  border-left: 4px solid #409eff;
+  border-left: 4px solid var(--el-color-primary);
 }
 
 .avatar-view-container {
