@@ -13,7 +13,7 @@ opencv-contrib-python-headless==4.8.1.78
 numpy==1.24.4
 
 # 人脸检测与对齐（MTCNN；未安装时后端会优雅回退到 Haar 级联）
-mtcnn==0.1.1
+mtcnn==1.0.0
 
 # 生产 WSGI 服务器（docker-entrypoint.sh 使用）
 gunicorn==21.2.0
