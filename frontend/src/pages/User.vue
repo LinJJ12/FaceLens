@@ -1424,8 +1424,6 @@ function exportAllData() {
     goals: goals.value,
     experiencePoints: experiencePoints.value,
     exportCount: exportCount.value,
-    gratitudes: JSON.parse(localStorage.getItem('gratitudes') || '[]'),
-    journals: JSON.parse(localStorage.getItem('journals') || '[]'),
     exportDate: new Date().toISOString(),
     version: '2.0.0'
   }

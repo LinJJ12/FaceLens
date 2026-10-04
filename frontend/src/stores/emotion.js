@@ -235,24 +235,6 @@ export const useEmotionStore = defineStore('emotion', () => {
     console.log('🗑️ 已清空所有预测记录')
   }
 
-  // 批量预测
-  async function batchPredict(images, detectFace = true) {
-    isLoading.value = true
-    try {
-      const response = await api.post('/batch_predict', {
-        images,
-        model: currentModel.value,
-        detect_face: detectFace
-      })
-      return response.data
-    } catch (error) {
-      console.error('批量预测失败:', error)
-      throw error
-    } finally {
-      isLoading.value = false
-    }
-  }
-
   // 初始化时加载数据（延迟执行以确保 IndexedDB 已准备好）
   setTimeout(async () => {
     const username = await getCurrentUsername()
@@ -280,7 +262,6 @@ export const useEmotionStore = defineStore('emotion', () => {
     fetchServerHistories,
     deleteServerHistory,
     predictEmotion,
-    batchPredict,
     setCurrentPrediction,
     clearCurrentPrediction,
     deletePrediction,

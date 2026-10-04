@@ -4,18 +4,14 @@
  */
 
 const DB_NAME = 'EmotionRecognitionDB'
-const DB_VERSION = 2 // 升级版本以添加新存储
+// 必须保持 2：老用户浏览器中数据库已是 v2，用更低版本打开会抛 VersionError
+const DB_VERSION = 2
 
 // 对象存储名称
 const STORES = {
-  // 原有的视频和图片数据
   VIDEO_HISTORY: 'video_history',
   IMAGE_PREDICTIONS: 'image_predictions',
   VIDEO_ANALYSIS: 'video_analysis',
-  
-  // 新增：用户相关数据（替代 localStorage）
-  USER_DATA: 'user_data',           // 用户信息、设置、成就等
-  APP_SETTINGS: 'app_settings'      // 应用级设置（主题、语言等）
 }
 
 class IndexedDBHelper {
@@ -71,28 +67,10 @@ class IndexedDBHelper {
 
         // 创建当前视频分析对象存储
         if (!db.objectStoreNames.contains(STORES.VIDEO_ANALYSIS)) {
-          const analysisStore = db.createObjectStore(STORES.VIDEO_ANALYSIS, { 
+          const analysisStore = db.createObjectStore(STORES.VIDEO_ANALYSIS, {
             keyPath: 'username'
           })
           console.log('✅ 创建 video_analysis 存储')
-        }
-
-        // V2: 创建用户数据存储（替代 localStorage）
-        if (!db.objectStoreNames.contains(STORES.USER_DATA)) {
-          const userStore = db.createObjectStore(STORES.USER_DATA, {
-            keyPath: 'key' // key 格式：'username:dataType' 如 'admin:settings'
-          })
-          userStore.createIndex('username', 'username', { unique: false })
-          userStore.createIndex('dataType', 'dataType', { unique: false })
-          console.log('✅ 创建 user_data 存储')
-        }
-
-        // V2: 创建应用设置存储（全局设置，不按用户隔离）
-        if (!db.objectStoreNames.contains(STORES.APP_SETTINGS)) {
-          const settingsStore = db.createObjectStore(STORES.APP_SETTINGS, {
-            keyPath: 'key' // key: 'theme', 'language', 'sidebarExpanded' 等
-          })
-          console.log('✅ 创建 app_settings 存储')
         }
       }
     })
@@ -105,53 +83,6 @@ class IndexedDBHelper {
     if (!this.db) {
       await this.init()
     }
-  }
-
-  /**
-   * 检查数据库版本并强制升级
-   */
-  async checkAndUpgrade() {
-    await this.ensureConnection()
-    
-    // 检查是否所有必需的存储都存在
-    const requiredStores = Object.values(STORES)
-    const missingStores = requiredStores.filter(
-      storeName => !this.db.objectStoreNames.contains(storeName)
-    )
-    
-    if (missingStores.length > 0) {
-      console.warn(`⚠️ 检测到旧版本数据库，缺少存储: ${missingStores.join(', ')}`)
-      console.log('🔄 正在删除旧数据库并创建新版本...')
-      
-      // 关闭当前连接
-      this.db.close()
-      this.db = null
-      
-      // 删除旧数据库
-      return new Promise((resolve, reject) => {
-        const deleteRequest = indexedDB.deleteDatabase(DB_NAME)
-        
-        deleteRequest.onsuccess = async () => {
-          console.log('✅ 旧数据库已删除')
-          // 重新初始化会创建新的 v2 数据库
-          await this.init()
-          console.log('✅ 新数据库创建完成')
-          resolve(true)
-        }
-        
-        deleteRequest.onerror = () => {
-          console.error('❌ 删除数据库失败:', deleteRequest.error)
-          reject(deleteRequest.error)
-        }
-        
-        deleteRequest.onblocked = () => {
-          console.warn('⚠️ 数据库删除被阻止，请关闭所有打开的标签页')
-          reject(new Error('Database deletion blocked'))
-        }
-      })
-    }
-    
-    return false
   }
 
   /**

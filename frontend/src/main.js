@@ -6,7 +6,6 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
-import { initStorage } from './utils/storage'
 import './assets/styles/theme.css'
 
 const app = createApp(App)
@@ -26,11 +25,5 @@ app.use(ElementPlus, {
   }
 })
 
-// 初始化存储系统（迁移 localStorage 到 IndexedDB）
-initStorage().then(() => {
-  console.log('✅ 存储系统已就绪')
-}).catch(error => {
-  console.error('❌ 存储系统初始化失败:', error)
-})
 
 app.mount('#app')

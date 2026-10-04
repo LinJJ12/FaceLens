@@ -18,16 +18,3 @@ export function resolveAssetUrl(path) {
   return `/api/uploads/${clean}?token=${encodeURIComponent(getAuthToken())}`
 }
 
-/** 从预测记录中取可展示的图片（服务端路径优先，其次本地 base64） */
-export function resolveRecordImage(record) {
-  if (!record) return ''
-  return (
-    resolveAssetUrl(record.thumbnail_path) ||
-    resolveAssetUrl(record.preprocessed_image_path) ||
-    resolveAssetUrl(record.original_image_path) ||
-    record.face_image ||
-    record.image ||
-    record.original_image ||
-    ''
-  )
-}

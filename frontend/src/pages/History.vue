@@ -40,9 +40,6 @@
             <el-button @click="resetSearch">重置</el-button>
           </el-form-item>
           <el-form-item>
-            <el-button type="info" plain @click="analyzeStorage">分析存储空间</el-button>
-          </el-form-item>
-          <el-form-item>
             <el-button type="warning" plain @click="cleanupStorage">清理本地图片</el-button>
           </el-form-item>
           <el-form-item>
@@ -175,7 +172,6 @@ import { useEmotionStore } from '../stores/emotion'
 import { useVideoStore } from '../stores/video'
 import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
-import { printStorageReport } from '../utils/storageAnalyzer'
 import { resolveAssetUrl } from '../utils/assets'
 import dbHelper, { STORES } from '../utils/indexedDB'
 
@@ -458,53 +454,6 @@ async function cleanupStorage() {
   }).catch(() => {
     ElMessage.info('已取消清理')
   })
-}
-
-// 分析本地存储空间使用情况
-async function analyzeStorage() {
-  try {
-    ElMessage.info('正在分析浏览器本地存储空间...')
-    const report = await printStorageReport()
-
-    const h = (v) => (v ?? 0)
-    let message = `总使用: ${report.indexedDB.totalMB} MB (${report.indexedDB.percentage}%)\n`
-    message += `存储限制: ${(report.indexedDB.limit / 1024 / 1024).toFixed(2)} MB\n`
-    message += `可用空间: ${((report.indexedDB.limit - report.indexedDB.total) / 1024 / 1024).toFixed(2)} MB\n\n`
-
-    message += `存储详情：\n`
-    message += `- 视频历史: ${h(report.indexedDB.stores.VIDEO_HISTORY?.count)} 条 (${h(report.indexedDB.stores.VIDEO_HISTORY?.sizeMB)} MB)\n`
-    message += `- 当前分析: ${h(report.indexedDB.stores.VIDEO_ANALYSIS?.count)} 条 (${h(report.indexedDB.stores.VIDEO_ANALYSIS?.sizeMB)} MB)\n`
-    message += `- 图片预测: ${h(report.indexedDB.stores.IMAGE_PREDICTIONS?.count)} 条 (${h(report.indexedDB.stores.IMAGE_PREDICTIONS?.sizeMB)} MB)\n`
-    message += `- 用户数据: ${h(report.indexedDB.stores.USER_DATA?.count)} 条 (${h(report.indexedDB.stores.USER_DATA?.sizeMB)} MB)\n`
-    message += `- 应用设置: ${h(report.indexedDB.stores.APP_SETTINGS?.count)} 条 (${h(report.indexedDB.stores.APP_SETTINGS?.sizeMB)} MB)\n\n`
-
-    const hasImages =
-      report.indexedDB.stores.VIDEO_HISTORY?.hasImages ||
-      report.indexedDB.stores.VIDEO_ANALYSIS?.hasImages ||
-      report.indexedDB.stores.IMAGE_PREDICTIONS?.hasImages
-
-    if (hasImages) {
-      message += `检测到本地图片数据，可通过"清理本地图片"释放空间\n\n`
-    }
-
-    if (report.warnings.length > 0) {
-      message += `提示：\n`
-      report.warnings.forEach(w => {
-        message += `- ${w.message}\n`
-      })
-    } else {
-      message += `存储使用正常`
-    }
-
-    ElMessageBox.alert(message.replace(/\n/g, '<br/>'), '浏览器本地存储分析', {
-      confirmButtonText: '确定',
-      type: report.indexedDB.percentage > 80 ? 'warning' : 'info',
-      dangerouslyUseHTMLString: true
-    })
-  } catch (error) {
-    console.error('分析存储空间失败:', error)
-    ElMessage.error('分析失败：' + error.message)
-  }
 }
 
 // 情绪到emoji的映射

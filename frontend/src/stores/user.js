@@ -235,88 +235,6 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  // 重置密码
-  const resetPassword = async (resetData) => {
-    try {
-      isLoading.value = true
-      await api.post('/auth/reset-password', resetData)
-      
-      ElMessage.success('密码重置成功，请重新登录')
-      return { success: true }
-    } catch (error) {
-      console.error('重置密码失败:', error)
-      const errorMessage = error.response?.data?.error || '重置失败，请重试'
-      ElMessage.error(errorMessage)
-      return { success: false, error: errorMessage }
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  // 验证邮箱
-  const verifyEmail = async (token) => {
-    try {
-      isLoading.value = true
-      await api.post('/auth/verify-email', { token })
-      
-      ElMessage.success('邮箱验证成功')
-      return { success: true }
-    } catch (error) {
-      console.error('邮箱验证失败:', error)
-      const errorMessage = error.response?.data?.error || '验证失败，请重试'
-      ElMessage.error(errorMessage)
-      return { success: false, error: errorMessage }
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  // 重新发送验证邮件
-  const resendVerificationEmail = async () => {
-    try {
-      isLoading.value = true
-      await api.post('/auth/resend-verification', {}, {
-        headers: {
-          Authorization: `Bearer ${token.value}`
-        }
-      })
-      
-      ElMessage.success('验证邮件已重新发送')
-      return { success: true }
-    } catch (error) {
-      console.error('重新发送验证邮件失败:', error)
-      const errorMessage = error.response?.data?.error || '发送失败，请重试'
-      ElMessage.error(errorMessage)
-      return { success: false, error: errorMessage }
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  // 删除账户
-  const deleteAccount = async (password) => {
-    try {
-      isLoading.value = true
-      await api.delete('/auth/account', {
-        headers: {
-          Authorization: `Bearer ${token.value}`
-        },
-        data: { password }
-      })
-      
-      clearUser()
-      ElMessage.success('账户已删除')
-      return { success: true }
-    } catch (error) {
-      console.error('删除账户失败:', error)
-      const errorMessage = error.response?.data?.error || '删除失败，请重试'
-      ElMessage.error(errorMessage)
-      return { success: false, error: errorMessage }
-    } finally {
-      isLoading.value = false
-    }
-  }
-
   // 初始化用户状态（从localStorage恢复）
   const initializeUser = () => {
     try {
@@ -334,37 +252,6 @@ export const useUserStore = defineStore('user', () => {
     } catch (error) {
       console.error('初始化用户状态失败:', error)
       clearUser()
-    }
-  }
-
-  // 检查权限
-  const hasPermission = (permission) => {
-    if (!user.value || !user.value.permissions) {
-      return false
-    }
-    return user.value.permissions.includes(permission)
-  }
-
-  // 检查角色
-  const hasRole = (role) => {
-    if (!user.value) {
-      return false
-    }
-    return user.value.role === role
-  }
-
-  // 获取用户统计信息
-  const getUserStats = async () => {
-    try {
-      const response = await api.get('/auth/stats', {
-        headers: {
-          Authorization: `Bearer ${token.value}`
-        }
-      })
-      return { success: true, data: response.data }
-    } catch (error) {
-      console.error('获取用户统计失败:', error)
-      return { success: false, error: error.response?.data?.error || '获取失败' }
     }
   }
 
@@ -393,13 +280,6 @@ export const useUserStore = defineStore('user', () => {
     updateUserInfo,
     changePassword,
     forgotPassword,
-    resetPassword,
-    verifyEmail,
-    resendVerificationEmail,
-    deleteAccount,
-    initializeUser,
-    hasPermission,
-    hasRole,
-    getUserStats
+    initializeUser
   }
 })

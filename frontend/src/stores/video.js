@@ -27,16 +27,6 @@ export const useVideoStore = defineStore('video', () => {
     return null
   }
 
-  // 🗂️ 生成按用户隔离的 localStorage 键名
-  function getStorageKey(suffix) {
-    const username = getCurrentUsername()
-    if (username) {
-      return `video_${suffix}_${username}`
-    }
-    // 未登录用户使用通用键
-    return `video_${suffix}_guest`
-  }
-
   // 🧹 深度清理数据，移除不可序列化的对象（函数、循环引用等）
   function deepClone(obj) {
     if (obj === null || typeof obj !== 'object') {
@@ -286,80 +276,6 @@ export const useVideoStore = defineStore('video', () => {
     console.log(`🗑️ 已从 IndexedDB 清空当前视频分析 [用户: ${username}]`)
   }
   
-  // 🧹 清理 IndexedDB 中的图片数据（释放存储空间）
-  async function cleanupImageData() {
-    try {
-      const username = getCurrentUsername()
-      console.log(`🧹 [VideoStore] 开始清理 IndexedDB 图片数据 [用户: ${username}]`)
-      
-      // 1. 清理视频历史记录中的图片
-      const history = await dbHelper.getByIndex(STORES.VIDEO_HISTORY, 'username', username)
-      if (history && history.length > 0) {
-        for (const item of history) {
-          const cleanedItem = {
-            ...item,
-            results: {
-              ...item.results,
-              timeline: item.results?.timeline?.map(frame => ({
-                frame_number: frame.frame_number,
-                frame_index: frame.frame_index,
-                timestamp: frame.timestamp,
-                time_formatted: frame.time_formatted,
-                emotion: frame.emotion,
-                emotion_cn: frame.emotion_cn,
-                confidence: frame.confidence,
-                probabilities: frame.probabilities,
-                probabilities_cn: frame.probabilities_cn
-                // 移除 original_frame, face_image 等
-              })) || []
-            }
-          }
-          await dbHelper.put(STORES.VIDEO_HISTORY, cleanedItem)
-        }
-        console.log(`✅ 已清理 ${history.length} 条视频历史的图片数据`)
-      }
-      
-      // 2. 清理当前分析中的图片
-      const current = await dbHelper.get(STORES.VIDEO_ANALYSIS, username)
-      if (current) {
-        const cleanedCurrent = {
-          ...current,
-          analysisResults: {
-            ...current.analysisResults,
-            timeline: current.analysisResults?.timeline?.map(frame => ({
-              frame_number: frame.frame_number,
-              frame_index: frame.frame_index,
-              timestamp: frame.timestamp,
-              time_formatted: frame.time_formatted,
-              emotion: frame.emotion,
-              emotion_cn: frame.emotion_cn,
-              confidence: frame.confidence,
-              probabilities: frame.probabilities,
-              probabilities_cn: frame.probabilities_cn
-            })) || []
-          }
-        }
-        await dbHelper.put(STORES.VIDEO_ANALYSIS, cleanedCurrent)
-        console.log('✅ 已清理当前分析的图片数据')
-      }
-      
-      // 重新加载数据
-      await loadHistory()
-      await loadCurrentAnalysis()
-      
-      console.log('✅ [VideoStore] 图片数据清理完成')
-      return true
-    } catch (error) {
-      console.error('❌ 清理图片数据失败:', error)
-      return false
-    }
-  }
-  
-  // 🧹 清理旧的 localStorage 数据（已弃用，仅用于一次性迁移）
-  function cleanupLegacyData() {
-    console.warn('⚠️ cleanupLegacyData 已弃用，数据已迁移到 IndexedDB')
-  }
-  
   // 🔄 重新加载当前用户的数据（用于用户切换后）
   async function loadFromStorage() {
     const username = getCurrentUsername()
@@ -424,8 +340,6 @@ export const useVideoStore = defineStore('video', () => {
     loadCurrentAnalysis,
     clearCurrentAnalysis,
     loadFromStorage, // 🆕 用户切换时重新加载
-    getCurrentUsername, // 🆕 暴露给外部使用
-    cleanupImageData, // 🆕 清理 IndexedDB 中的图片数据
-    cleanupLegacyData // ⚠️ 已弃用，保留兼容性
+    getCurrentUsername // 🆕 暴露给外部使用
   }
 })
