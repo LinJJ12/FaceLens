@@ -14,7 +14,14 @@ from datetime import datetime, timedelta
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from src.config.settings import JWT_SECRET_KEY
+from src.config.settings import (
+    JWT_SECRET_KEY,
+    SEED_DEMO_USERS,
+    RATELIMIT_LOGIN,
+    RATELIMIT_REGISTER,
+    RATELIMIT_PASSWORD,
+)
+from src.extensions import limiter
 
 # 尝试导入数据库模型（可选）
 try:
@@ -33,9 +40,8 @@ REFRESH_TOKEN_EXPIRATION_DAYS = 7
 # 旧版无盐 SHA-256 哈希的格式（64 位十六进制），用于登录时识别并升级
 _LEGACY_SHA256_RE = re.compile(r'^[0-9a-f]{64}$')
 
-# 模拟用户数据库（实际项目中应使用真实数据库）
-USERS_DB = {
-    # 默认测试用户
+# 演示账号（仅 SEED_DEMO_USERS=true 时生效；公开部署请设为 false）
+DEMO_USERS = {
     'admin': {
         'id': 1,
         'username': 'admin',
@@ -61,6 +67,14 @@ USERS_DB = {
         'permissions': ['basic_emotion_recognition', 'personal_data']
     }
 }
+
+# 模拟用户数据库（实际项目中应使用真实数据库）
+USERS_DB = {}
+if SEED_DEMO_USERS:
+    USERS_DB.update(DEMO_USERS)
+
+# USERS_DB 的并发写保护（gunicorn threads=4）
+USERS_DB_LOCK = threading.Lock()
 
 # 模拟刷新token存储（实际项目中应使用Redis或数据库）
 REFRESH_TOKENS = {}
@@ -272,58 +286,59 @@ def token_required_or_query(f):
     return decorated
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit(RATELIMIT_REGISTER)
 def register():
     """用户注册"""
     try:
         data = request.get_json()
-        
+
         # 验证必需字段
         required_fields = ['username', 'email', 'password']
         for field in required_fields:
             if not data.get(field):
                 return jsonify({'error': f'Missing field: {field}'}), 400
-        
+
         username = data['username'].lower().strip()
         email = data['email'].lower().strip()
         password = data['password']
-        
+
         # 验证用户名格式
         if len(username) < 3 or len(username) > 20:
             return jsonify({'error': 'Username must be 3-20 characters long'}), 400
-        
+
         if not username.replace('_', '').isalnum():
             return jsonify({'error': 'Username can only contain letters, numbers, and underscores'}), 400
-        
+
         # 验证邮箱格式
         if '@' not in email or '.' not in email:
             return jsonify({'error': 'Invalid email format'}), 400
-        
+
         # 验证密码强度
         if len(password) < 6:
             return jsonify({'error': 'Password must be at least 6 characters long'}), 400
-        
+
         # 检查用户是否已存在
         if get_user_by_username(username):
             return jsonify({'error': 'Username already exists'}), 409
-        
+
         if get_user_by_email(email):
             return jsonify({'error': 'Email already exists'}), 409
-        
-        # 创建新用户
-        user_id = max([user['id'] for user in USERS_DB.values()]) + 1
-        new_user = {
-            'id': user_id,
-            'username': username,
-            'email': email,
-            'password_hash': hash_password(password),
-            'role': 'user',
-            'avatar': '',
-            'created_at': datetime.utcnow().isoformat() + 'Z',
-            'is_active': True,
-            'is_verified': False  # 需要邮箱验证
-        }
-        
-        USERS_DB[username] = new_user
+
+        # 创建新用户（内存 dict 仅作 DB 不可用时的兜底）
+        with USERS_DB_LOCK:
+            user_id = max([user['id'] for user in USERS_DB.values()], default=0) + 1
+            new_user = {
+                'id': user_id,
+                'username': username,
+                'email': email,
+                'password_hash': hash_password(password),
+                'role': 'user',
+                'avatar': '',
+                'created_at': datetime.utcnow().isoformat() + 'Z',
+                'is_active': True,
+                'is_verified': False  # 需要邮箱验证
+            }
+            USERS_DB[username] = new_user
 
         # 如果数据库可用，写入数据库以持久化用户
         if HAVE_DB:
@@ -340,14 +355,16 @@ def register():
                     )
                     db.session.add(db_user)
                     db.session.commit()
-                    # 同步生成的 id
-                    new_user['id'] = db_user.id
+                    # 同步数据库生成的真实 id（可能与内存序号错位）
+                    with USERS_DB_LOCK:
+                        new_user['id'] = db_user.id
             except Exception as e:
                 # 记录但不阻止注册（兼容旧逻辑）
-                print(f"Warning: failed to persist new user to DB: {e}")
-        
-        # 生成token
-        access_token, refresh_token = generate_tokens(user_id)
+                current_app.logger.warning(f"failed to persist new user to DB: {e}")
+
+        # 生成token——必须用最终 id（DB 优先），否则内存序号与数据库错位时
+        # 会签发成数据库中另一个同 id 账号（可能是管理员）的有效会话
+        access_token, refresh_token = generate_tokens(new_user['id'])
         
         return jsonify({
             'message': 'User registered successfully',
@@ -368,6 +385,7 @@ def register():
         return jsonify({'error': f'Registration failed: {str(e)}'}), 500
 
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit(RATELIMIT_LOGIN)
 def login():
     """用户登录"""
     try:
@@ -566,6 +584,7 @@ def change_password():
         return jsonify({'error': f'Failed to change password: {str(e)}'}), 500
 
 @auth_bp.route('/forgot-password', methods=['POST'])
+@limiter.limit(RATELIMIT_PASSWORD)
 def forgot_password():
     """忘记密码"""
     try:
@@ -588,6 +607,7 @@ def forgot_password():
         return jsonify({'error': f'Failed to process forgot password: {str(e)}'}), 500
 
 @auth_bp.route('/reset-password', methods=['POST'])
+@limiter.limit(RATELIMIT_PASSWORD)
 def reset_password():
     """重置密码"""
     try:
@@ -606,6 +626,7 @@ def reset_password():
         return jsonify({'error': f'Failed to reset password: {str(e)}'}), 500
 
 @auth_bp.route('/verify-email', methods=['POST'])
+@limiter.limit(RATELIMIT_PASSWORD)
 def verify_email():
     """验证邮箱"""
     try:

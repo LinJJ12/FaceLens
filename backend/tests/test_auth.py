@@ -141,3 +141,51 @@ def test_user_stats(client, auth_headers):
     stats = resp.get_json()['stats']
     assert stats['total_predictions'] == 0
     assert stats['active_days'] == 0
+
+
+def test_register_token_uses_database_id(client, admin_headers):
+    """回归：注册签发的 token 必须对应数据库里的真实账号。
+
+    管理员后台创建的用户只写数据库、不进内存 USERS_DB，导致内存序号与
+    数据库自增 id 错位；旧实现用内存序号签发 token，会认证成数据库中
+    同 id 的其他账号（可能是管理员）。
+    """
+    import uuid
+    suffix = uuid.uuid4().hex[:8]
+
+    # 管理员后台建一个仅存在于数据库的用户，制造序号错位
+    resp = client.post('/api/auth/admin/users', headers=admin_headers, json={
+        'username': f'dbonly{suffix}',
+        'email': f'dbonly{suffix}@example.com',
+        'password': 'password123',
+    })
+    assert resp.status_code == 201, resp.get_json()
+
+    resp = client.post('/api/auth/register', json={
+        'username': f'reg{suffix}',
+        'email': f'reg{suffix}@example.com',
+        'password': 'password123',
+    })
+    assert resp.status_code == 201, resp.get_json()
+    token = resp.get_json()['token']
+
+    me = client.get('/api/auth/me', headers={'Authorization': f'Bearer {token}'})
+    assert me.status_code == 200
+    assert me.get_json()['user']['username'] == f'reg{suffix}'
+
+
+def test_login_rate_limited(app, app_module, client):
+    """登录接口限流：同一 IP 超过阈值后返回 429。"""
+    limiter = app_module.limiter
+    limiter.enabled = True
+    limiter.reset()
+    try:
+        for _ in range(15):
+            resp = client.post('/api/auth/login', json={'username': 'nobody', 'password': 'x'})
+            assert resp.status_code == 401
+        resp = client.post('/api/auth/login', json={'username': 'nobody', 'password': 'x'})
+        assert resp.status_code == 429, resp.get_json()
+        assert '频繁' in resp.get_json()['error']
+    finally:
+        limiter.reset()
+        limiter.enabled = False

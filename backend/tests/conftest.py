@@ -74,7 +74,10 @@ def app_module():
 @pytest.fixture(scope='session')
 def app(app_module):
     """Flask 应用实例。"""
-    return app_module.app
+    app = app_module.app
+    # 默认关闭限流，避免用例间共享计数导致误伤；限流行为在专门用例中开启验证
+    app_module.limiter.enabled = False
+    return app
 
 
 @pytest.fixture()

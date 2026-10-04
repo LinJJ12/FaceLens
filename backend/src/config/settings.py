@@ -89,6 +89,19 @@ else:
 # CORS 允许来源（逗号分隔；默认 * 保持本地开发开箱即用）
 CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '*').split(',') if o.strip()]
 
+# 演示账号（admin/admin123、test/test123）是否种入系统。
+# 公开部署时务必设为 false 并创建自己的管理员账号。
+SEED_DEMO_USERS = os.environ.get('SEED_DEMO_USERS', 'true').lower() in ('1', 'true', 'yes')
+
+# 接口速率限制（按客户端 IP 计数）
+RATELIMIT_LOGIN = '15 per minute'      # 登录：防暴力破解
+RATELIMIT_REGISTER = '10 per minute'   # 注册：防批量刷号
+RATELIMIT_PASSWORD = '10 per minute'   # 找回/重置密码、邮箱验证类
+RATELIMIT_PREDICT = '60 per minute'    # 单图推理
+RATELIMIT_BATCH = '10 per minute'      # 批量推理
+RATELIMIT_VIDEO = '10 per minute'      # 视频上传/分析（推理放大器）
+RATELIMIT_AVATAR = '30 per minute'     # 头像上传
+
 # 日志配置
 LOG_CONFIG = {
     'level': 'INFO',

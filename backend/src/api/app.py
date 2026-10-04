@@ -54,12 +54,20 @@ from src.config.settings import (
     EMOTION_VALENCE,
     POSITIVE_EMOTIONS,
     NEGATIVE_EMOTIONS,
+    SEED_DEMO_USERS,
+    RATELIMIT_PREDICT,
+    RATELIMIT_BATCH,
+    RATELIMIT_VIDEO,
+    RATELIMIT_AVATAR,
 )
 from src.api.health import (
     health_bp,
     health_score_to_level,
     positive_rate_to_alert,
 )
+from src.extensions import limiter
+from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_limiter.errors import RateLimitExceeded
 import logging
 import time
 from functools import wraps
@@ -133,8 +141,21 @@ def _user_can_access_upload(rel_path: str, current_user: dict) -> bool:
 
 
 app = Flask(__name__)
+# nginx 反代会在 X-Forwarded-For 中写入真实客户端 IP；信任一层代理，
+# 使限流/日志按真实 IP 计数（直连部署时无此头，自动回退 remote_addr）
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 # 允许跨域请求（生产环境建议通过 CORS_ORIGINS 环境变量配置白名单）
 CORS(app, origins=CORS_ORIGINS or '*')  # noqa: E501
+
+# 接口速率限制（登录/注册/推理等，见 settings.RATELIMIT_*）
+limiter.init_app(app)
+
+
+@app.errorhandler(RateLimitExceeded)
+def _handle_rate_limit_exceeded(e):
+    logger.warning("请求触发限流: %s %s (%s)", request.method, request.path, e)
+    return jsonify({'error': '请求过于频繁，请稍后再试'}), 429
+
 
 # 服务启动时间（用于系统信息中的运行时长）
 APP_START_TIME = time.time()
@@ -155,6 +176,12 @@ from src.storage.database import (
     VideoAnalysisResult, EmotionJournal, GratitudeRecord
 )
 init_db(app)
+
+if SEED_DEMO_USERS:
+    logger.warning(
+        "演示账号已启用（admin/admin123、test/test123）。公开部署前请设置 "
+        "SEED_DEMO_USERS=false 并创建自己的管理员账号。"
+    )
 
 # 注册认证蓝图
 app.register_blueprint(auth_bp)
@@ -640,6 +667,7 @@ def update_health_tables(username, emotion, emotion_cn, confidence):
         db.session.rollback()
 
 @app.route('/api/predict', methods=['POST'])
+@limiter.limit(RATELIMIT_PREDICT)
 @token_required
 def predict_emotion():
     """
@@ -790,6 +818,7 @@ def predict_emotion():
         return jsonify({'error': f'预测失败: {str(e)}'}), 500
 
 @app.route('/api/batch_predict', methods=['POST'])
+@limiter.limit(RATELIMIT_BATCH)
 @token_required
 def batch_predict():
     """批量预测接口"""
@@ -995,6 +1024,7 @@ def allowed_video_file(filename):
 
 
 @app.route('/api/video/upload', methods=['POST'])
+@limiter.limit(RATELIMIT_VIDEO)
 @token_required
 def upload_video():
     """
@@ -1067,6 +1097,7 @@ def upload_video():
 
 
 @app.route('/api/video/analyze', methods=['POST'])
+@limiter.limit(RATELIMIT_VIDEO)
 @token_required
 def analyze_video():
     """
@@ -1821,6 +1852,7 @@ def admin_delete_video_analysis(analysis_id):
 
 # ==================== 头像上传 ====================
 @app.route('/api/auth/avatar', methods=['POST'])
+@limiter.limit(RATELIMIT_AVATAR)
 @token_required
 def upload_avatar():
     """上传用户头像（base64 data URL），保存到 uploads/avatars/<用户名>/ 并更新资料"""

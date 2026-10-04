@@ -17,6 +17,8 @@ services:
     environment:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
       DATABASE_URL: ${DATABASE_URL:-}
+      SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
     volumes:
       # 模型权重（只读挂载）
       - ./models:/app/models:ro
