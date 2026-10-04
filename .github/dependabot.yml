@@ -10,9 +10,14 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-      # Flask-Limiter >= 3.6 要求 Python >= 3.9，与当前 3.8 基线不兼容；
-      # 升级 Python 基线后应移除此条
+      # Flask-Limiter >= 3.6 / numpy >= 1.25 要求 Python >= 3.9，
+      # 且 TF 2.10 依赖 numpy < 1.25、opencv 4.14 与当前 numpy 冲突，
+      # 与当前 3.8 基线不兼容；升级 Python/TF 基线后应移除以下条目
       - dependency-name: flask-limiter
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: numpy
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: opencv-contrib-python-headless
         update-types: ["version-update:semver-minor"]
   - package-ecosystem: npm
     directory: /frontend
