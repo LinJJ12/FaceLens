@@ -133,6 +133,8 @@ python main.py
 | `admin` | `admin123` | 管理员 |
 | `test` | `test123` | 普通用户 |
 
+> 演示账号仅供本地体验：登录/注册等接口有按 IP 的速率限制；公开部署时设置 `SEED_DEMO_USERS=false` 关闭它们并创建自己的管理员。
+
 > 无权重时后端同样可以启动：模型预热阶段会跳过缺失文件，`/api/models` 显示各模型 `available: false`，识别接口不可用，其余功能正常。
 
 ### 3️⃣ 启动前端
@@ -185,6 +187,9 @@ docker compose down -v     # 同时删除数据卷（清空用户数据）
 |------|------|
 | `JWT_SECRET_KEY` | JWT 签名密钥。**部署前必须设置为强随机密钥** |
 | `DATABASE_URL` | 可选。默认 `backend/data/db/emotion_recognition.db` |
+| `SEED_DEMO_USERS` | 是否种入演示账号 admin/test（默认 `true`）。**公开部署务必设为 `false`** |
+| `CORS_ORIGINS` | 允许的跨域来源，逗号分隔（默认 `*`，生产建议改为前端地址） |
+| `FRONTEND_PORT` | Docker 部署时前端对外端口（默认 `8080`） |
 
 ## 📡 主要 API
 
