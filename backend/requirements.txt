@@ -12,7 +12,7 @@ Werkzeug==2.3.8
 opencv-contrib-python-headless==4.8.1.78
 
 # numpy 必须固定 <2：TensorFlow 2.10 与 opencv 4.8 均不兼容 numpy 2.x
-numpy==1.24.4
+numpy==1.26.4
 
 # 人脸检测与对齐（可选）：mtcnn 不列入默认依赖——其元数据会连带安装
 # GUI 版 opencv-python 与 keras，与 headless opencv 冲突。
