@@ -13,6 +13,7 @@ import base64
 from PIL import Image
 import io
 import os
+import secrets
 import re
 import sys
 import platform
@@ -24,6 +25,7 @@ from src.ml.image_preprocess import (
     infer_input_shape_from_keras,
     infer_input_shape_from_saved_model,
     detect_and_align_mtcnn,
+    detect_faces,
     get_mtcnn_detector,
     get_haar_cascade,
 )
@@ -300,15 +302,18 @@ def _predict_face_emotion(image, model_name, model_entry, detect_face=True):
     """
     单张人脸图像的完整预测管线（检测 → 对齐 → 质量评估 → 预处理 → 推理）。
     单图 / 批量 / 视频帧三条路径共用，保证行为一致。
+    同一张图只跑一次人脸检测，显示裁剪与对齐共用检测结果。
     返回 dict，失败抛异常。
     """
     quality_start = time.time()
     if detect_face:
+        # 只跑一次 MTCNN 检测：显示裁剪与对齐共用同一份检测结果
+        detections = detect_faces(image)
         # 用于前端显示：只检测和裁剪，不旋转对齐（避免黑边）
-        display_face = detect_face_for_display(image)
-        # 用于模型预测：完整的检测和对齐流程（可能有黑边，但模型需要）
-        aligned = detect_and_align_mtcnn(image)
-        pred_image = aligned if aligned is not None else detect_face(image)
+        display_face = detect_face_for_display(image, detections=detections)
+        # 用于模型预测：完整的对齐流程（可能有黑边，但模型需要）
+        aligned = detect_and_align_mtcnn(image, detections=detections) if detections else None
+        pred_image = aligned if aligned is not None else detect_face_haar(image)
     else:
         display_face = image.copy()
         pred_image = display_face
@@ -427,9 +432,9 @@ def preprocess_image(image_data, target_size=(100, 100)):
         logger.error(f"图像预处理失败: {str(e)}")
         return None
 
-def detect_face(image):
+def detect_face_haar(image):
     """
-    使用OpenCV检测人脸
+    使用OpenCV Haar 级联检测人脸（MTCNN 不可用时的兜底）
     Args:
         image: PIL Image对象
     Returns:
@@ -461,39 +466,37 @@ def detect_face(image):
         logger.error(f"人脸检测失败: {str(e)}")
         return image
 
-def detect_face_for_display(image, margin_ratio=0.2):
+def detect_face_for_display(image, margin_ratio=0.2, detections=None):
     """
     纯粹用于前端显示的人脸检测和裁剪（不做旋转对齐，避免黑边）
     优先使用 MTCNN 检测，失败则回退到 Haar 级联
     Args:
         image: PIL Image对象
         margin_ratio: 裁剪时的边距比例（相对于人脸框的宽/高）
+        detections: 预先算好的 detect_faces() 结果，传入可避免同一帧重复跑检测
     Returns:
         face_image: 干净裁剪的人脸图像（不含旋转黑边）
     """
     try:
-        detector = get_mtcnn_detector()
-        if detector is not None:
+        res = detections if detections is not None else detect_faces(image)
+        if res:
             rgb = image.convert('RGB')
-            res = detector.detect_faces(np.array(rgb))
+            # 选择置信度最高的人脸
+            face = max(res, key=lambda d: d.get('confidence', 0))
+            x, y, w, h = face['box']
 
-            if res:
-                # 选择置信度最高的人脸
-                face = max(res, key=lambda d: d.get('confidence', 0))
-                x, y, w, h = face['box']
+            # 添加边距，确保不超出图像边界
+            margin_w = int(w * margin_ratio)
+            margin_h = int(h * margin_ratio)
+            x1 = max(0, x - margin_w)
+            y1 = max(0, y - margin_h)
+            x2 = min(rgb.width, x + w + margin_w)
+            y2 = min(rgb.height, y + h + margin_h)
 
-                # 添加边距，确保不超出图像边界
-                margin_w = int(w * margin_ratio)
-                margin_h = int(h * margin_ratio)
-                x1 = max(0, x - margin_w)
-                y1 = max(0, y - margin_h)
-                x2 = min(rgb.width, x + w + margin_w)
-                y2 = min(rgb.height, y + h + margin_h)
-
-                # 裁剪人脸区域
-                face_crop = rgb.crop((x1, y1, x2, y2))
-                logger.info(f"✂️  MTCNN 人脸裁剪成功 (置信度: {face['confidence']:.2%})")
-                return face_crop
+            # 裁剪人脸区域
+            face_crop = rgb.crop((x1, y1, x2, y2))
+            logger.info(f"✂️  MTCNN 人脸裁剪成功 (置信度: {face['confidence']:.2%})")
+            return face_crop
     except Exception as e:
         logger.warning(f"MTCNN 检测失败，回退到 Haar 检测: {str(e)}")
 
@@ -550,11 +553,15 @@ def get_models():
         })
     return jsonify({'models': model_info})
 
-def update_health_tables(username, emotion, emotion_cn, confidence):
+def update_health_tables(username, emotion, emotion_cn, confidence, count=1, confidence_sum=None):
     """
-    更新健康相关的数据表（每次预测/每帧视频分析调用一次）
+    更新健康相关的数据表（单次预测调用一次；视频分析可按情绪聚合批量调用）
     - UserEmotionSummary: 每日情绪统计汇总（按 用户+日期 upsert）
     - HealthAssessment: 心理健康评估（按 用户+日期 upsert，一天至多一条）
+
+    Args:
+        count: 本次计入的预测条数（批量聚合时 >1）
+        confidence_sum: 这批预测的置信度之和；缺省按 confidence * count 计算
 
     口径约定（与前端 Analysis.vue / Health.vue 及 health.py 实时计算路径保持一致）：
     - 积极 = happy/normal，消极 = anger/sad/fear/disgust，中性 = surprised
@@ -565,6 +572,8 @@ def update_health_tables(username, emotion, emotion_cn, confidence):
         from datetime import date
         today = date.today()
         cn = emotion_cn or EMOTION_EN_TO_CN.get(emotion, emotion)
+        count = max(1, int(count))
+        conf_sum = float(confidence_sum) if confidence_sum is not None else float(confidence) * count
 
         # 1. 更新或创建今天的情绪统计汇总
         summary = UserEmotionSummary.query.filter_by(
@@ -573,16 +582,18 @@ def update_health_tables(username, emotion, emotion_cn, confidence):
         ).first()
 
         if summary:
-            summary.total_predictions += 1
+            prev_total = summary.total_predictions or 0
+            summary.total_predictions = prev_total + count
             total = summary.total_predictions
             counts = dict(summary.emotion_counts or {})
-            counts[cn] = counts.get(cn, 0) + 1
+            counts[cn] = counts.get(cn, 0) + count
             summary.emotion_counts = counts
             # 标记 JSON 字段已修改（SQLAlchemy 需要）
             flag_modified(summary, 'emotion_counts')
         else:
-            total = 1
-            counts = {cn: 1}
+            prev_total = 0
+            total = count
+            counts = {cn: count}
             summary = UserEmotionSummary(
                 username=username,
                 summary_date=today,
@@ -607,11 +618,11 @@ def update_health_tables(username, emotion, emotion_cn, confidence):
         summary.positive_rate = round(positive_count / total * 100, 2) if total else 0.0
         summary.negative_rate = round(negative_count / total * 100, 2) if total else 0.0
 
-        # 平均置信度（增量平均）
-        if total > 1 and summary.avg_confidence:
-            summary.avg_confidence = round((summary.avg_confidence * (total - 1) + confidence) / total, 2)
+        # 平均置信度（增量平均：旧均值 × 旧条数 + 新增置信度和，再除以新条数）
+        if prev_total > 0 and summary.avg_confidence:
+            summary.avg_confidence = round((summary.avg_confidence * prev_total + conf_sum) / total, 2)
         else:
-            summary.avg_confidence = round(confidence, 2)
+            summary.avg_confidence = round(conf_sum / total, 2) if total else round(confidence, 2)
 
         # 情绪稳定性：按效价加权分布的标准差（比例分布，不随识别次数漂移）
         # 与前端 emotionMap 口径一致：1=最消极 ... 7=最积极
@@ -1059,18 +1070,22 @@ def upload_video():
             logger.warning(f"视频上传过大: {content_length} bytes")
             return jsonify({'error': '上传视频过大'}), 413
 
-        # 保存视频文件（video_id 带用户前缀，用于分析接口校验属主，防止越权分析他人视频）
+        # 保存视频文件（video_id 带用户前缀 + 随机后缀防同秒同名覆盖；
+        # 前缀用于分析接口校验属主，防止越权分析他人视频）
         filename = secure_filename(file.filename)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        video_id = f"u{request.current_user.get('id')}_{timestamp}_{filename}"
+        video_id = f"u{request.current_user.get('id')}_{timestamp}_{secrets.token_hex(4)}_{filename}"
 
-        video_data = file.read()
-        # 双重保护：再检查一次实际读取字节数
-        if len(video_data) > app.config.get('MAX_VIDEO_BYTES', 200 * 1024 * 1024):
-            logger.warning(f"视频读取后发现过大: {len(video_data)} bytes")
+        # 流式写盘：直接落盘，不经内存（此前 file.read() 会让 200MB 上限整段驻留）
+        video_path = str(Path(video_processor.upload_folder) / video_id)
+        file.save(video_path)
+
+        # 双重保护：落盘后再检查实际大小
+        actual_size = os.path.getsize(video_path)
+        if actual_size > app.config.get('MAX_VIDEO_BYTES', 200 * 1024 * 1024):
+            logger.warning(f"视频保存后发现过大: {actual_size} bytes")
+            os.remove(video_path)
             return jsonify({'error': '上传视频过大'}), 413
-
-        video_path = video_processor.save_video(video_data, video_id)
 
         # 顺带清理过期视频（默认保留 7 天），避免 uploads 无限膨胀
         video_processor.cleanup_old_videos(days=7)
@@ -1179,103 +1194,120 @@ def analyze_video():
         except Exception:
             video_duration = 0
         
-        # 提取视频帧
+        # 提取视频帧（生成器：一次一帧在内存，推理后即弃，避免数百帧 RGB 数组整体驻留）
         extract_start = time.time()
-        frames = video_processor.extract_frames(video_path, interval, max_frames)
+        frame_iter = video_processor.iter_frames(video_path, interval, max_frames)
         extract_time = time.time() - extract_start
-        
-        logger.info(f"✅ 提取完成: {len(frames)} 帧 (耗时: {extract_time:.2f}秒)")
-        
+
+        logger.info(f"✅ 帧提取器就绪 (耗时: {extract_time:.2f}秒)")
+
         # 当前用户信息（token_required 装饰器已解析，直接取用）
         current_username = request.current_user.get('username')
         logger.info(f"👤 当前用户: {current_username}")
-        
+
         # 对每一帧进行情绪识别
         analysis_results = []
+        pending_histories = []
+        emotion_agg = {}  # 英文情绪 -> {count, conf_sum, emotion_cn}
         predict_start = time.time()
-        
-        for idx, (timestamp, frame_rgb, frame_base64) in enumerate(frames):
+
+        for idx, (frame_ts, frame_rgb, frame_thumb) in enumerate(frame_iter):
             try:
                 # 转换为PIL Image
                 image = Image.fromarray(frame_rgb)
 
-                # 共享预测管线（检测/对齐/预处理/推理）
+                # 共享预测管线（检测/对齐/预处理/推理，检测只跑一次）
                 prediction = _predict_face_emotion(image, model_name, model_entry, detect_face=detect_face)
                 confidence = prediction['confidence']
                 aligned_face = prediction['aligned_face']
 
                 # 格式化时间
-                minutes = int(timestamp // 60)
-                seconds = int(timestamp % 60)
+                minutes = int(frame_ts // 60)
+                seconds = int(frame_ts % 60)
                 time_formatted = f"{minutes:02d}:{seconds:02d}"
 
                 result = {
                     'frame_index': idx,
-                    'timestamp': timestamp,
+                    'timestamp': frame_ts,
                     'time_formatted': time_formatted,
                     'emotion': prediction['emotion'],
                     'emotion_cn': prediction['emotion_cn'],
                     'confidence': confidence,
-                    'original_frame': frame_base64,
+                    # original_frame 为压缩缩略图（原图 ndarray 已释放，控制响应体大小）
+                    'original_frame': frame_thumb,
                     'face_image': prediction['face_image_data_url'],
                     'probabilities': prediction['probabilities'],
                     'probabilities_cn': prediction['probabilities_cn']
                 }
 
                 analysis_results.append(result)
-                logger.info(f"  ✓ 帧 {idx+1}/{len(frames)}: {time_formatted} - {prediction['emotion_cn']} ({confidence:.2%})")
 
-                # 💾 保存视频帧到数据库
-                try:
-                    frame_path = None
-                    if current_username:
+                # 💾 对齐人脸图落盘（磁盘 IO，失败不阻断分析）
+                frame_path = None
+                if current_username:
+                    try:
                         timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S%f')
                         username_folder = _safe_user_dirname(current_username)
                         frame_dir = os.path.join(str(UPLOAD_FOLDER), 'video_frames', username_folder)
                         os.makedirs(frame_dir, exist_ok=True)
-
                         frame_path = os.path.join(frame_dir, f"frame_{timestamp_str}_idx{idx}.jpg")
-                        # 保存人脸图片
                         aligned_face.save(frame_path, 'JPEG', quality=85)
                         frame_path = _to_upload_relpath(frame_path)
+                    except Exception as save_error:
+                        logger.warning(f"⚠️  保存帧图片失败: {save_error}")
+                        frame_path = None
 
-                    # 保存到数据库（记录用户名）
-                    history = PredictionHistory(
-                        emotion=prediction['emotion'],
-                        emotion_cn=prediction['emotion_cn'],
-                        confidence=confidence,
-                        model_used=model_name.upper(),
-                        username=current_username,
-                        preprocessed_image_path=frame_path,
-                        video_path=video_id,
-                        frame_timestamp=timestamp,
-                        frame_index=idx,
-                        probabilities=result['probabilities'],
-                        input_type='video'
-                    )
-                    db.session.add(history)
-                    db.session.commit()
+                # 历史记录先攒起来，循环结束后一次性入库
+                pending_histories.append(PredictionHistory(
+                    emotion=prediction['emotion'],
+                    emotion_cn=prediction['emotion_cn'],
+                    confidence=confidence,
+                    model_used=model_name.upper(),
+                    username=current_username,
+                    preprocessed_image_path=frame_path,
+                    video_path=video_id,
+                    frame_timestamp=frame_ts,
+                    frame_index=idx,
+                    probabilities=result['probabilities'],
+                    input_type='video'
+                ))
 
-                    # 🔄 为每一帧更新情绪汇总表（如果有登录用户）
-                    if current_username:
-                        try:
-                            update_health_tables(
-                                username=current_username,
-                                emotion=prediction['emotion'],
-                                emotion_cn=prediction['emotion_cn'],
-                                confidence=confidence
-                            )
-                        except Exception as update_error:
-                            logger.warning(f"⚠️  更新帧{idx}的情绪汇总失败: {update_error}")
+                agg = emotion_agg.setdefault(
+                    prediction['emotion'],
+                    {'count': 0, 'conf_sum': 0.0, 'emotion_cn': prediction['emotion_cn']}
+                )
+                agg['count'] += 1
+                agg['conf_sum'] += confidence
 
-                except Exception as save_error:
-                    logger.error(f"⚠️  保存视频帧历史记录失败: {save_error}")
-                    db.session.rollback()  # 回滚失败的事务
-                    # 不中断分析流程
+                logger.info(f"  ✓ 帧 {idx+1}: {time_formatted} - {prediction['emotion_cn']} ({confidence:.2%})")
 
             except Exception as e:
-                logger.error(f"❌ 帧 {idx+1} 分析失败: {str(e)}")
+                logger.error(f"❌ 帧 {idx + 1} 分析失败: {str(e)}")
                 continue
+
+        # 历史记录一次性入库（替代逐帧 commit，数百帧只开一次事务）
+        if pending_histories:
+            try:
+                db.session.add_all(pending_histories)
+                db.session.commit()
+            except Exception as save_error:
+                logger.error(f"⚠️  保存视频帧历史记录失败: {save_error}")
+                db.session.rollback()  # 回滚失败的事务
+
+            # 按情绪聚合更新健康表（替代逐帧读-改-写，每种情绪只调用一次）
+            if current_username:
+                for emotion_en, agg in emotion_agg.items():
+                    try:
+                        update_health_tables(
+                            username=current_username,
+                            emotion=emotion_en,
+                            emotion_cn=agg['emotion_cn'],
+                            confidence=agg['conf_sum'] / agg['count'],
+                            count=agg['count'],
+                            confidence_sum=agg['conf_sum'],
+                        )
+                    except Exception as update_error:
+                        logger.warning(f"⚠️  更新情绪汇总失败 ({emotion_en}): {update_error}")
 
         predict_time = time.time() - predict_start
 

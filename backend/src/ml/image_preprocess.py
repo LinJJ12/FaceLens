@@ -194,22 +194,39 @@ def preprocess_image(image_path: str) -> np.ndarray:
 
 
 # =============== 基于 MTCNN 的人脸检测与对齐 ===============
-def detect_and_align_mtcnn(image: Image.Image, desired_size: int = 112, margin: int = 10) -> Optional[Image.Image]:
+def detect_faces(image: Image.Image) -> list:
+    """
+    MTCNN 人脸检测（只跑一次检测，显示裁剪与对齐可共用结果）。
+    未安装 mtcnn 或检测失败时返回 []。
+    """
+    detector = get_mtcnn_detector()
+    if detector is None:
+        return []
+    try:
+        rgb = image.convert('RGB')
+        return detector.detect_faces(np.array(rgb)) or []
+    except Exception:
+        return []
+
+
+def detect_and_align_mtcnn(
+    image: Image.Image,
+    desired_size: int = 112,
+    margin: int = 10,
+    detections: Optional[list] = None,
+) -> Optional[Image.Image]:
     """
     使用 MTCNN 检测人脸并进行五点对齐，输出对齐后的人脸图像。
     - desired_size: 输出图像的目标边长（正方形）
     - margin: 在裁剪时留出的边距像素
+    - detections: 预先算好的 detect_faces() 结果，传入可避免同一帧重复跑检测
     返回：PIL.Image 或 None（未检测到）
     """
-    detector = get_mtcnn_detector()
-    if detector is None:
-        return None
-
-    rgb = image.convert('RGB')
-    res = detector.detect_faces(np.array(rgb))
+    res = detections if detections is not None else detect_faces(image)
     if not res:
         return None
 
+    rgb = image.convert('RGB')
     # 选置信度最高的人脸
     face = max(res, key=lambda d: d.get('confidence', 0))
     box = face['box']  # [x, y, w, h]
@@ -237,8 +254,9 @@ def detect_and_align_mtcnn(image: Image.Image, desired_size: int = 112, margin: 
     # 旋转整张图（作为兜底方案）
     rotated = rgb.rotate(-angle, resample=Image.BILINEAR, expand=True)
 
-    # 重新用 MTCNN 检测一次，得到旋转后的 box（更稳妥）
-    res2 = detector.detect_faces(np.array(rotated))
+    # 旋转后的图重新检测一次，得到旋转后的 box（更稳妥）
+    detector = get_mtcnn_detector()
+    res2 = detector.detect_faces(np.array(rotated)) if detector is not None else []
     if not res2:
         # 退化为原 box 裁剪
         return _crop_face_box(rgb, box, margin, desired_size)
