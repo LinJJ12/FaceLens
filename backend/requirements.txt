@@ -9,7 +9,7 @@ PyJWT==2.8.0
 Werkzeug==2.3.8
 
 # opencv-contrib 已包含普通版功能；headless 无 GUI 依赖，服务器/CI 无需 libGL
-opencv-contrib-python-headless==4.8.1.78
+opencv-contrib-python-headless==4.14.0.94
 
 # numpy 必须固定 <2：TensorFlow 2.10 与 opencv 4.8 均不兼容 numpy 2.x
 numpy==1.24.4
