@@ -51,7 +51,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ['18', '20']
+        # Node 18 已 EOL，且按需引入插件链（unplugin）要求 Node >= 20
+        node-version: ['20', '22']
     defaults:
       run:
         working-directory: frontend

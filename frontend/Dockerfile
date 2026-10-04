@@ -1,6 +1,6 @@
 # 前端 — 构建 Vue 静态资源并由 Nginx 提供，/api 反向代理至后端
 
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 

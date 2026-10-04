@@ -10,6 +10,10 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Flask-Limiter >= 3.6 要求 Python >= 3.9，与当前 3.8 基线不兼容；
+      # 升级 Python 基线后应移除此条
+      - dependency-name: flask-limiter
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: npm
     directory: /frontend
     schedule:
