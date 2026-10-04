@@ -405,7 +405,7 @@ import {
   WarningFilled,
   Delete
 } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import echarts from '../utils/echarts'
 import { registerFacelensChartThemes, currentChartTheme, chartToken } from '../utils/chartTheme'
 import { useVideoStore } from '../stores/video'
 import api from '../api/client'

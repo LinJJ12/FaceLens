@@ -10,7 +10,7 @@
  *   registerFacelensChartThemes()          // 首次 echarts.init 前调用一次
  *   echarts.init(el, currentChartTheme())  // 主题切换时需 dispose 后以新主题重建
  */
-import * as echarts from 'echarts'
+import echarts from './echarts'
 
 // 与 theme.css 的 zinc 中性灰令牌一一对应
 const TOKENS = {
