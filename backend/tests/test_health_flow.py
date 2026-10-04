@@ -134,3 +134,18 @@ def test_assessment_api_roundtrip(client, auth_headers, health_ctx):
 def test_assessment_api_rejects_bad_date(client, auth_headers):
     resp = client.get('/api/health/assessment?date=not-a-date', headers=auth_headers)
     assert resp.status_code == 400
+
+
+def test_sqlite_pragmas_applied(app):
+    """WAL 与 busy_timeout 应在连接级生效（并发写安全的前提）。"""
+    from src.storage.database import db
+
+    with app.app_context():
+        conn = db.engine.connect()
+        try:
+            mode = conn.execute(db.text('PRAGMA journal_mode')).scalar()
+            timeout = conn.execute(db.text('PRAGMA busy_timeout')).scalar()
+        finally:
+            conn.close()
+    assert str(mode).lower() == 'wal'
+    assert int(timeout) == 30000

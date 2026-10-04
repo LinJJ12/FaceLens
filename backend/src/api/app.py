@@ -553,7 +553,20 @@ def get_models():
         })
     return jsonify({'models': model_info})
 
+_HEALTH_TABLES_LOCK = threading.Lock()
+
+
 def update_health_tables(username, emotion, emotion_cn, confidence, count=1, confidence_sum=None):
+    """update_health_tables 的进程内串行入口（见 _update_health_tables_impl）。"""
+    # 读-改-写必须串行：gunicorn workers=1 多线程下并发调用会互相覆盖计数，
+    # 跨进程场景由 SQLite busy_timeout 兜底
+    with _HEALTH_TABLES_LOCK:
+        return _update_health_tables_impl(
+            username, emotion, emotion_cn, confidence, count, confidence_sum
+        )
+
+
+def _update_health_tables_impl(username, emotion, emotion_cn, confidence, count=1, confidence_sum=None):
     """
     更新健康相关的数据表（单次预测调用一次；视频分析可按情绪聚合批量调用）
     - UserEmotionSummary: 每日情绪统计汇总（按 用户+日期 upsert）

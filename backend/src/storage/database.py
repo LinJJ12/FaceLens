@@ -26,7 +26,10 @@ EXPECTED_TABLES = (
 class PredictionHistory(db.Model):
     """预测历史表 - 轻量级，只存储元数据和文件路径"""
     __tablename__ = 'prediction_history'
-    
+    # 历史查询几乎都按 用户+时间 过滤排序（/api/histories、统计、健康汇总）
+    __table_args__ = (
+        db.Index('ix_prediction_history_user_created', 'username', 'created_at'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     emotion = db.Column(db.String(50), nullable=False)
     emotion_cn = db.Column(db.String(50), nullable=False)
@@ -107,7 +110,11 @@ class User(db.Model):
 class UserEmotionSummary(db.Model):
     """用户情绪统计汇总表（数据分析+心理健康共用）"""
     __tablename__ = 'user_emotion_summary'
-    
+    # 一个用户一天只有一条汇总（upsert 口径），数据库层兜底防并发双插
+    __table_args__ = (
+        db.Index('uq_user_emotion_summary_user_date', 'username', 'summary_date', unique=True),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False)
     summary_date = db.Column(db.Date, nullable=False)
@@ -164,7 +171,11 @@ class UserEmotionSummary(db.Model):
 class HealthAssessment(db.Model):
     """心理健康评估表（心理健康界面专用）"""
     __tablename__ = 'health_assessment'
-    
+    # 一个用户一天只有一条评估（upsert 口径），数据库层兜底防并发双插
+    __table_args__ = (
+        db.Index('uq_health_assessment_user_date', 'username', 'assessment_date', unique=True),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False)
     assessment_date = db.Column(db.Date, nullable=False)
@@ -317,15 +328,67 @@ class GratitudeRecord(db.Model):
             'created_at': self.created_at.isoformat()
         }
 
+def _configure_sqlite_pragmas(engine):
+    """SQLite 并发三件套：WAL（读写不互斥）+ busy_timeout（写锁等待而非立刻报错）。"""
+    if engine.dialect.name != 'sqlite':
+        return
+
+    from sqlalchemy import event
+
+    @event.listens_for(engine, 'connect')
+    def _set_sqlite_pragma(dbapi_conn, _record):
+        cursor = dbapi_conn.cursor()
+        try:
+            cursor.execute('PRAGMA journal_mode=WAL')
+            cursor.execute('PRAGMA busy_timeout=30000')
+            cursor.execute('PRAGMA synchronous=NORMAL')
+        finally:
+            cursor.close()
+
+
+def _ensure_sqlite_indexes():
+    """为旧库幂等补建索引与唯一约束（旧库建表时没有这些约束，须先去重再建）。"""
+    engine = db.engine
+    if engine.dialect.name != 'sqlite':
+        return
+    with engine.begin() as conn:
+        conn.execute(db.text(
+            "CREATE INDEX IF NOT EXISTS ix_prediction_history_user_created "
+            "ON prediction_history (username, created_at)"
+        ))
+        # 唯一索引建不起来多半是历史脏数据：同 用户+日期 保留最小 id
+        conn.execute(db.text(
+            "DELETE FROM user_emotion_summary WHERE id NOT IN ("
+            "  SELECT MIN(id) FROM user_emotion_summary GROUP BY username, summary_date)"
+        ))
+        conn.execute(db.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_emotion_summary_user_date "
+            "ON user_emotion_summary (username, summary_date)"
+        ))
+        conn.execute(db.text(
+            "DELETE FROM health_assessment WHERE id NOT IN ("
+            "  SELECT MIN(id) FROM health_assessment GROUP BY username, assessment_date)"
+        ))
+        conn.execute(db.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_health_assessment_user_date "
+            "ON health_assessment (username, assessment_date)"
+        ))
+
+
 def init_db(app):
     """初始化数据库：建表、轻量 schema 升级、写入演示账号（若不存在）。"""
     db.init_app(app)
     with app.app_context():
+        _configure_sqlite_pragmas(db.engine)
         db.create_all()
         try:
             _upgrade_sqlite_schema()
         except Exception as e:
             logger.warning('SQLite schema 升级检查失败: %s', e)
+        try:
+            _ensure_sqlite_indexes()
+        except Exception as e:
+            logger.warning('SQLite 索引补建失败: %s', e)
         try:
             _seed_default_users()
         except Exception as e:
