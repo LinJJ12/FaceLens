@@ -1440,7 +1440,7 @@ function updateVideoEmotionChart() {
         smooth: true,
         yAxisIndex: 0,
         itemStyle: {
-          color: 'var(--color-accent)'
+          color: chartToken('--color-accent')
         },
         areaStyle: {
           color: {

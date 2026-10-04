@@ -562,15 +562,31 @@ function triggerUpload() {
   uploadRef.value.$el.querySelector('input').click()
 }
 
+// 与后端 ALLOWED_VIDEO_EXTENSIONS / MAX_VIDEO_BYTES 一致
+const ALLOWED_VIDEO_EXTS = ['mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv']
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024
+
 function handleVideoSelect(file) {
-  selectedFile.value = file.raw
-  
+  const raw = file.raw
+  const ext = raw.name.split('.').pop().toLowerCase()
+  if (!ALLOWED_VIDEO_EXTS.includes(ext)) {
+    ElMessage.error('不支持的视频格式，支持：' + ALLOWED_VIDEO_EXTS.join(' / '))
+    clearSelection()
+    return
+  }
+  if (raw.size > MAX_VIDEO_BYTES) {
+    ElMessage.error('视频过大（最大 200MB）')
+    clearSelection()
+    return
+  }
+  selectedFile.value = raw
+
   // 创建本地预览URL
   if (videoPreviewUrl.value) {
     URL.revokeObjectURL(videoPreviewUrl.value)
   }
-  videoPreviewUrl.value = URL.createObjectURL(file.raw)
-  
+  videoPreviewUrl.value = URL.createObjectURL(raw)
+
   ElMessage.success('视频选择成功')
 }
 
@@ -1076,7 +1092,7 @@ onMounted(() => {
 
 .emotion-flow {
   padding: 20px;
-  background: linear-gradient(135deg, var(--color-accent)15 0%, var(--color-accent)15 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 15%, transparent) 0%, color-mix(in srgb, var(--color-accent) 15%, transparent) 100%);
   border-radius: 8px;
   margin-bottom: 20px;
 }

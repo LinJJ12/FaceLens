@@ -25,6 +25,16 @@ updates:
       # 基础镜像固定在 bullseye（3.8 时代），忽略 python 小版本及以上升级
       - dependency-name: python
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+    ignore:
+      # node 大版本升级需同步验证构建，nginx 大版本需验证配置兼容
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+      - dependency-name: nginx
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

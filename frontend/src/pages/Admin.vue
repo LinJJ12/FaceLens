@@ -2149,7 +2149,7 @@ onMounted(async () => {
     return
   }
 
-  // 为了确保历史记录能正确映射到用户名，先加载用户列表，再加载历史
+  // 为了确保历史记录能正确映射到用户名，先加载用户列表
   try {
     await fetchUsers()
   } catch (e) {
@@ -2160,46 +2160,15 @@ onMounted(async () => {
   // 加载真实系统信息（运行时长/版本/模型状态）
   fetchSystemInfo()
 
-  try {
-    await fetchHistories()
-  } catch (e) {
-    console.warn('加载历史记录时发生错误:', e)
-  }
-
-  // 加载情绪日记
-  try {
-    await fetchJournals()
-  } catch (e) {
-    console.warn('加载情绪日记时发生错误:', e)
-  }
-
-  // 加载感恩记录
-  try {
-    await fetchGratitudes()
-  } catch (e) {
-    console.warn('加载感恩记录时发生错误:', e)
-  }
-
-  // 加载情绪汇总
-  try {
-    await fetchEmotionSummaries()
-  } catch (e) {
-    console.warn('加载情绪汇总时发生错误:', e)
-  }
-
-  // 加载健康评估
-  try {
-    await fetchHealthAssessments()
-  } catch (e) {
-    console.warn('加载健康评估时发生错误:', e)
-  }
-
-  // 加载视频分析
-  try {
-    await fetchVideoAnalyses()
-  } catch (e) {
-    console.warn('加载视频分析时发生错误:', e)
-  }
+  // 其余数据相互独立，并行加载（此前逐个 await，首屏时间被串行放大）
+  await Promise.allSettled([
+    fetchHistories(),
+    fetchJournals(),
+    fetchGratitudes(),
+    fetchEmotionSummaries(),
+    fetchHealthAssessments(),
+    fetchVideoAnalyses(),
+  ])
 
   // 系统统计可以并行加载
   fetchSystemStats()

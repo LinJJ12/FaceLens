@@ -280,8 +280,21 @@ function formatTime(timestamp) {
   return date.toLocaleTimeString('zh-CN')
 }
 
-// 文件选择处理
+// 文件选择处理（与后端上限一致：16MB）
+const MAX_IMAGE_BYTES = 16 * 1024 * 1024
+
 function handleFileChange(file) {
+  const raw = file.raw
+  if (raw && raw.type && !raw.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    handleClear()
+    return
+  }
+  if (raw && raw.size > MAX_IMAGE_BYTES) {
+    ElMessage.error('图片过大（最大 16MB）')
+    handleClear()
+    return
+  }
   const reader = new FileReader()
   reader.onload = (e) => {
     previewImage.value = e.target.result
@@ -583,7 +596,7 @@ watch(() => showCameraDialog.value, (newVal) => {
   gap: 2rem;
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: linear-gradient(135deg, var(--color-accent)20 0%, var(--color-accent)20 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 20%, transparent) 0%, color-mix(in srgb, var(--color-accent) 20%, transparent) 100%);
   border-radius: 12px;
 }
 

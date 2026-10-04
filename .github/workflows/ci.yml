@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# 最小权限：CI 只需读代码、跑测试，不发布任何产物
+permissions:
+  contents: read
+
 jobs:
   backend-tests:
     name: 后端测试 (Python ${{ matrix.python-version }})

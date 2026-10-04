@@ -219,7 +219,7 @@ const sidebarExpanded = ref(true)
 const privacyVisible = ref(false)
 
 const EMOJI_MAP = {
-  happy: '😊', sad: '😢', angry: '😠', fear: '😨',
+  happy: '😊', sad: '😢', anger: '😠', fear: '😨',
   surprised: '😲', disgust: '🤢', normal: '😐'
 }
 
