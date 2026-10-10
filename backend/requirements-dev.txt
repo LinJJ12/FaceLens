@@ -1,4 +1,4 @@
 -r requirements.txt
 pytest==7.4.4
 requests==2.31.0
-ruff==0.16.9
+ruff==0.16.10
